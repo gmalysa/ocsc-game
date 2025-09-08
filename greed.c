@@ -15,7 +15,7 @@
 #define MAX_ATTR 10
 #define MAX_GOALS 10
 
-static char *gameid = "0a5b132f-53db-4e01-b6e1-20716c0b0284";
+static char *gameid = "313948a9-2a37-4253-853e-37fd075e175c";
 static uint32_t personid = 0;
 
 
@@ -261,7 +261,7 @@ bool reject_for_required(struct person *p, struct goals *goals) {
 /**
  * decide what to do for the given person
  */
-bool decide_for(struct person *p, struct goals *goals) {
+bool decide_for(struct person *p, struct goals *goals, bool guess) {
 	struct goals *rest;
 	bool ret;
 
@@ -271,6 +271,10 @@ bool decide_for(struct person *p, struct goals *goals) {
 		DEBUG("out of constraints, accepting if we have room\n");
 		return goals->space > 0;
 	}
+
+	// No losers
+	if (p->n == 0)
+		return false;
 
 	// First check if this person's acceptance would cause us to fail
 	if (reject_for_required(p, goals)) {
@@ -291,17 +295,24 @@ bool decide_for(struct person *p, struct goals *goals) {
 		return goals->space > 0;
 	}
 
-	// They match our hardest goal, accept them
+	// They match our hardest goal
 	if (person_has_attr(p, goals->g[0]->attr)) {
-		DEBUG("matches attr and we have room, accepting\n");
-		return true;
+		// When we're guessing, we should still reject some fraction
+		// of these partial matches in order to reduce pressure on the hardest
+		// goal
+//		if (guess) {
+//		}
+//		else {
+			DEBUG("matches attr and we have room, accepting\n");
+			return true;
+//		}
 	}
 
 	// They do not match but if we have room to expect them based on the expected
 	// reduction from the first goal, go ahead and accept them
 	INDENT(1);
 	rest = adjust_goal_rest(goals);
-	ret = decide_for(p, rest);
+	ret = decide_for(p, rest, true);
 	UNDENT(1);
 	free_goals(rest);
 	return ret;
@@ -472,7 +483,7 @@ bool get_person(struct person *p, bool action, bool first) {
 
 int main(int argc, char **argv) {
 	bool choice;
-	bool first = true;;
+	bool first = true;
 	struct person p;
 	struct goals *goals = alloc_goals(2);
 	all_goals = goals;
@@ -484,7 +495,7 @@ int main(int argc, char **argv) {
 
 	init_attrmap();
 
-	choice = true;
+	choice = false;
 	while (true) {
 		if (!get_person(&p, choice, first)) {
 			DEBUG("done!\n");
@@ -492,7 +503,7 @@ int main(int argc, char **argv) {
 		}
 
 		first = false;
-		choice = decide_for(&p, goals);
+		choice = decide_for(&p, goals, false);
 		if (choice)
 			update_goals(&p, goals);
 	}
