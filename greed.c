@@ -15,20 +15,49 @@
 #define MAX_ATTR 10
 #define MAX_GOALS 10
 
-static char *gameid = "313948a9-2a37-4253-853e-37fd075e175c";
+static char *gameid = "425ba124-b176-4e90-870f-d3b88e85f993";
 static uint32_t personid = 0;
-
+static bool first = true;
 
 // Table of probability values here, in order of attributes as set up
 // in the table below
+
+// Scenario 2
+//static float __p[] = {
+//	0.6265f, 0.47f, 0.06227f, 0.398f,
+//};
+
 static float __p[] = {
-	0.3225f, 0.3225f
+	0.6795f, 0.5735f, 0.691f, 0.04614f, 0.04454f, 0.4564f
 };
 
 // Correlation matrix, with indices matching the order set up in the table below
-static float __r[2][2] = {
-	{1.0f, 0.18304299322062992f},
-	{0.18304299322062992f, 1.0f},
+// Scenario 1
+//static float __r[2][2] = {
+//	{1.0f, 0.18304299322062992f},
+//	{0.18304299322062992f, 1.0f},
+//};
+// Scenario 2
+//static float __r[4][4] = {
+//	{1.0f, -0.469616933267432f, 0.0946331703989159f, -0.654940381560618f},
+//	{-0.469616933267432f, 1.0f, 0.141972591404715f, 0.572406780843645f},
+//	{0.0946331703989159f, 0.141972591404715f, 1.0f, 0.144464595056508f},
+//	{-0.654940381560618f, 0.572406780843645f, 0.144464595056508f, 1.0f},
+//};
+// Scenario 3
+static float __r[6][6] = {
+	{1.0f, -0.0811017577715299f, -0.169656347550531f, 0.0371992837675389f,
+		0.0722352115638984f, 0.111887667034228f},
+	{-0.0811017577715299f, 1.0f, 0.375711059360155f, 0.00366933143887117f,
+		-0.0308324709818108f, -0.71725293825194f},
+	{-0.169656347550531f, 0.375711059360155f, 1.0f, -0.00345309267933775f,
+		-0.110247196063585f, -0.35210244615974f},
+	{0.0371992837675389f, 0.00366933143887117f, -0.00345309267933775f, 1.0f,
+		0.479906408031673f, 0.047973811326805f},
+	{0.0722352115638984f, -0.0308324709818108f, -0.110247196063585f,
+		0.479906408031673f, 1.0f, 0.099844522862699f},
+	{0.111887667034228f, -0.71725293825194f, -0.35210244615974f,
+		0.047973811326805f, 0.099844522862699f, 1.0f},
 };
 
 struct person {
@@ -55,6 +84,7 @@ struct goals {
 };
 
 static struct goals *all_goals;
+static CURL *curl;
 
 void dump_exit(void) {
 	ERROR("exit. goal state:\n");
@@ -66,6 +96,8 @@ void dump_exit(void) {
 	ERROR("game uuid: %s\n", gameid);
 	ERROR("current personid: %u\n", personid);
 
+	if (curl)
+		curl_easy_cleanup(curl);
 	exit(1);
 }
 
@@ -112,8 +144,10 @@ void init_attrmap(void) {
 	struct binary_map_entry entries[] = {
 		{.key = 0, .value = &__attr[0]},
 		{.key = 1, .value = &__attr[1]},
-//		{.key = 2, .value = &__attr[2]},
-//		{.key = 3, .value = &__attr[3]},
+		{.key = 2, .value = &__attr[2]},
+		{.key = 3, .value = &__attr[3]},
+		{.key = 4, .value = &__attr[4]},
+		{.key = 5, .value = &__attr[5]},
 	};
 
 	error_t *ret;
@@ -192,19 +226,26 @@ int64_t getL(struct goal *g) {
 }
 
 int goal_lencomp(const void *_a, const void *_b) {
-	const struct goal *a = _a;
-	const struct goal *b = _b;
-	return (int) a->L - b->L;
+	const struct goal * const *a = _a;
+	const struct goal * const *b = _b;
+	return (int) ((*b)->L - (*a)->L);
 }
 
-void sort_by_L(struct goal **goals, size_t n) {
+void sort_by_L(struct goals *goals) {
 	size_t i;
 
-	for (i = 0; i < n; ++i) {
-		goals[i]->L = getL(goals[i]);
+	for (i = 0; i < goals->n; ++i) {
+		goals->g[i]->L = getL(goals->g[i]);
 	}
 
-	qsort(goals, n, sizeof(*goals), goal_lencomp);
+	qsort(goals->g, goals->n, sizeof(*goals->g), goal_lencomp);
+
+	DEBUG("sorted goals: ");
+	for (i = 0; i < goals->n; ++i) {
+		DEBUG("[%zu]=a:%zd, n:%zd, L:%zd ", i, goals->g[i]->attr, goals->g[i]->num,
+			goals->g[i]->L);
+	}
+	DEBUG("\n");
 }
 
 /**
@@ -244,7 +285,7 @@ bool reject_for_required(struct person *p, struct goals *goals) {
 
 	for (i = 0; i < goals->n; ++i) {
 		// if this goal is required
-		if (goals->g[i]->num == goals->space) {
+		if (goals->g[i]->num >= goals->space) {
 			// and this person does not have this attribute
 			if (!person_has_attr(p, goals->g[i]->attr)) {
 				DEBUG("p is missing required attr %zd (needs %zd of %zd)\n",
@@ -273,8 +314,10 @@ bool decide_for(struct person *p, struct goals *goals, bool guess) {
 	}
 
 	// No losers
-	if (p->n == 0)
+	if (p->n == 0) {
+		DEBUG("rejected as a loser\n");
 		return false;
+	}
 
 	// First check if this person's acceptance would cause us to fail
 	if (reject_for_required(p, goals)) {
@@ -284,15 +327,17 @@ bool decide_for(struct person *p, struct goals *goals, bool guess) {
 
 	// now arrange our goals in order of most difficult to easiest and figure out
 	// if they would help us
-	sort_by_L(goals->g, goals->n);
+	sort_by_L(goals);
 
 	DEBUG("target attr %zd needs %zd of %zd, L = %zd\n", goals->g[0]->attr,
 		goals->g[0]->num, goals->space, goals->g[0]->L);
 
-	// If the hardest goal has no constraints left then we can accept anyone
+	// If the hardest remaining goal has no requirements this person is
+	// also a loser
 	if (goals->g[0]->num <= 0) {
-		DEBUG("out of constraints, accepting if we have room\n");
-		return goals->space > 0;
+		DEBUG("out of constraints, reclassifying as a loser\n");
+		return false;
+//		return goals->space > 0;
 	}
 
 	// They match our hardest goal
@@ -361,10 +406,36 @@ size_t save_body(char *ptr, size_t size, size_t nmemb, void *data) {
 }
 
 uint64_t str2attr(const char *s) {
+	// Scenario 1
 	if (strncmp(s, "young", 5) == 0)
 		return 0;
 	if (strncmp(s, "well_dressed", 12) == 0)
 		return 1;
+
+	// Scenario 2
+	if (strncmp(s, "techno_lover", 12) == 0)
+		return 0;
+	if (strncmp(s, "well_connected", 14) == 0)
+		return 1;
+	if (strncmp(s, "creative", 8) == 0)
+		return 2;
+	if (strncmp(s, "berlin_local", 12) == 0)
+		return 3;
+
+	// Scenario 3
+	if (strncmp(s, "underground_veteran", 19) == 0)
+		return 0;
+	if (strncmp(s, "international", 13) == 0)
+		return 1;
+	if (strncmp(s, "fashion_forward", 15) == 0)
+		return 2;
+	if (strncmp(s, "queer_friendly", 14) == 0)
+		return 3;
+	if (strncmp(s, "vinyl_collector", 15) == 0)
+		return 4;
+	if (strncmp(s, "german_speaker", 14) == 0)
+		return 5;
+
 	ERROR("unknown attr starting at %10s", s);
 	dump_exit();
 	return 10000;
@@ -447,13 +518,7 @@ bool parse_person(struct person *p, bool first) {
 
 bool get_person(struct person *p, bool action, bool first) {
 	char urlbuf[256];
-	CURL *curl = curl_easy_init();
 	CURLcode res;
-
-	if (!curl) {
-		ERROR("curl failure\n");
-		dump_exit();
-	}
 
 	if (first) {
 		snprintf(urlbuf, sizeof(urlbuf),
@@ -469,31 +534,46 @@ bool get_person(struct person *p, bool action, bool first) {
 	DEBUG("making request for %s\n", urlbuf);
 
 	curl_easy_setopt(curl, CURLOPT_URL, urlbuf);
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, save_body);
 	res = curl_easy_perform(curl);
 
 	if (res != CURLE_OK) {
-		ERROR("failure from curl\n");
+		ERROR("failure from curl = %d\n", res);
 		dump_exit();
 	}
 
-	curl_easy_cleanup(curl);
 	return parse_person(p, first);
 }
 
 int main(int argc, char **argv) {
 	bool choice;
-	bool first = true;
 	struct person p;
-	struct goals *goals = alloc_goals(2);
-	all_goals = goals;
+	struct goals *goals = alloc_goals(6);
 	goals->space = 1000;
 	goals->g[0]->attr = 0;
-	goals->g[0]->num = 600;
+	goals->g[0]->num = 500;
 	goals->g[1]->attr = 1;
-	goals->g[1]->num = 600;
+	goals->g[1]->num = 650;
+	goals->g[2]->attr = 2;
+	goals->g[2]->num = 550;
+	goals->g[3]->attr = 3;
+	goals->g[3]->num = 250;
+	goals->g[4]->attr = 4;
+	goals->g[4]->num = 200;
+	goals->g[5]->attr = 5;
+	goals->g[5]->num = 800;
 
+	all_goals = goals;
 	init_attrmap();
+
+	sort_by_L(goals);
+
+	curl = curl_easy_init();
+	if (!curl) {
+		ERROR("curl easy init failed\n");
+		dump_exit();
+	}
+
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, save_body);
 
 	choice = false;
 	while (true) {
