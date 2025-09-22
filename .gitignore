@@ -1,0 +1,8 @@
+build/
+libgjm
+greed
+greed-test
+berghain-server
+server-test
+analyze
+berghain.rdb
