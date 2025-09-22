@@ -8,35 +8,39 @@
 
 #include <curl/curl.h>
 
-#include <errors.h>
-#include <debug.h>
-#include <binary_map.h>
+#include <libgjm/errors.h>
+#include <libgjm/debug.h>
+#include <libgjm/binary_map.h>
 
 #define MAX_ATTR 10
 #define MAX_GOALS 10
 
-static char *gameid = "425ba124-b176-4e90-870f-d3b88e85f993";
+static char *gameid = "8df86f43-97d5-4b79-a91c-561865463c0e";
 static uint32_t personid = 0;
 static bool first = true;
 
 // Table of probability values here, in order of attributes as set up
 // in the table below
 
+// Scenario 1
+static float __p[] = {
+	0.3225f, 0.3225f,
+};
 // Scenario 2
 //static float __p[] = {
 //	0.6265f, 0.47f, 0.06227f, 0.398f,
 //};
-
-static float __p[] = {
-	0.6795f, 0.5735f, 0.691f, 0.04614f, 0.04454f, 0.4564f
-};
+// Scenario 3
+//static float __p[] = {
+//	0.6795f, 0.5735f, 0.691f, 0.04614f, 0.04454f, 0.4564f
+//};
 
 // Correlation matrix, with indices matching the order set up in the table below
 // Scenario 1
-//static float __r[2][2] = {
-//	{1.0f, 0.18304299322062992f},
-//	{0.18304299322062992f, 1.0f},
-//};
+static float __r[2][2] = {
+	{1.0f, 0.18304299322063f},
+	{0.18304299322063f, 1.0f},
+};
 // Scenario 2
 //static float __r[4][4] = {
 //	{1.0f, -0.469616933267432f, 0.0946331703989159f, -0.654940381560618f},
@@ -45,20 +49,20 @@ static float __p[] = {
 //	{-0.654940381560618f, 0.572406780843645f, 0.144464595056508f, 1.0f},
 //};
 // Scenario 3
-static float __r[6][6] = {
-	{1.0f, -0.0811017577715299f, -0.169656347550531f, 0.0371992837675389f,
-		0.0722352115638984f, 0.111887667034228f},
-	{-0.0811017577715299f, 1.0f, 0.375711059360155f, 0.00366933143887117f,
-		-0.0308324709818108f, -0.71725293825194f},
-	{-0.169656347550531f, 0.375711059360155f, 1.0f, -0.00345309267933775f,
-		-0.110247196063585f, -0.35210244615974f},
-	{0.0371992837675389f, 0.00366933143887117f, -0.00345309267933775f, 1.0f,
-		0.479906408031673f, 0.047973811326805f},
-	{0.0722352115638984f, -0.0308324709818108f, -0.110247196063585f,
-		0.479906408031673f, 1.0f, 0.099844522862699f},
-	{0.111887667034228f, -0.71725293825194f, -0.35210244615974f,
-		0.047973811326805f, 0.099844522862699f, 1.0f},
-};
+//static float __r[6][6] = {
+//	{1.0f, -0.0811017577715299f, -0.169656347550531f, 0.0371992837675389f,
+//		0.0722352115638984f, 0.111887667034228f},
+//	{-0.0811017577715299f, 1.0f, 0.375711059360155f, 0.00366933143887117f,
+//		-0.0308324709818108f, -0.71725293825194f},
+//	{-0.169656347550531f, 0.375711059360155f, 1.0f, -0.00345309267933775f,
+//		-0.110247196063585f, -0.35210244615974f},
+//	{0.0371992837675389f, 0.00366933143887117f, -0.00345309267933775f, 1.0f,
+//		0.479906408031673f, 0.047973811326805f},
+//	{0.0722352115638984f, -0.0308324709818108f, -0.110247196063585f,
+//		0.479906408031673f, 1.0f, 0.099844522862699f},
+//	{0.111887667034228f, -0.71725293825194f, -0.35210244615974f,
+//		0.047973811326805f, 0.099844522862699f, 1.0f},
+//};
 
 struct person {
 	uint64_t attr[MAX_ATTR];
@@ -144,10 +148,10 @@ void init_attrmap(void) {
 	struct binary_map_entry entries[] = {
 		{.key = 0, .value = &__attr[0]},
 		{.key = 1, .value = &__attr[1]},
-		{.key = 2, .value = &__attr[2]},
-		{.key = 3, .value = &__attr[3]},
-		{.key = 4, .value = &__attr[4]},
-		{.key = 5, .value = &__attr[5]},
+//		{.key = 2, .value = &__attr[2]},
+//		{.key = 3, .value = &__attr[3]},
+//		{.key = 4, .value = &__attr[4]},
+//		{.key = 5, .value = &__attr[5]},
 	};
 
 	error_t *ret;
@@ -314,10 +318,10 @@ bool decide_for(struct person *p, struct goals *goals, bool guess) {
 	}
 
 	// No losers
-	if (p->n == 0) {
-		DEBUG("rejected as a loser\n");
-		return false;
-	}
+//	if (p->n == 0) {
+//		DEBUG("rejected as a loser\n");
+//		return false;
+//	}
 
 	// First check if this person's acceptance would cause us to fail
 	if (reject_for_required(p, goals)) {
@@ -336,8 +340,8 @@ bool decide_for(struct person *p, struct goals *goals, bool guess) {
 	// also a loser
 	if (goals->g[0]->num <= 0) {
 		DEBUG("out of constraints, reclassifying as a loser\n");
-		return false;
-//		return goals->space > 0;
+//		return false;
+		return goals->space > 0;
 	}
 
 	// They match our hardest goal
@@ -549,18 +553,36 @@ int main(int argc, char **argv) {
 	struct person p;
 	struct goals *goals = alloc_goals(6);
 	goals->space = 1000;
+
+	// Scenario 1
 	goals->g[0]->attr = 0;
-	goals->g[0]->num = 500;
+	goals->g[0]->num = 600;
 	goals->g[1]->attr = 1;
-	goals->g[1]->num = 650;
-	goals->g[2]->attr = 2;
-	goals->g[2]->num = 550;
-	goals->g[3]->attr = 3;
-	goals->g[3]->num = 250;
-	goals->g[4]->attr = 4;
-	goals->g[4]->num = 200;
-	goals->g[5]->attr = 5;
-	goals->g[5]->num = 800;
+	goals->g[1]->num = 600;
+
+	// Scenario 2
+//	goals->g[0]->attr = 0;
+//	goals->g[0]->num = 650;
+//	goals->g[1]->attr = 1;
+//	goals->g[1]->num = 450;
+//	goals->g[2]->attr = 2;
+//	goals->g[2]->num = 300;
+//	goals->g[3]->attr = 3;
+//	goals->g[3]->num = 750;
+
+	// Scenario 3
+//	goals->g[0]->attr = 0;
+//	goals->g[0]->num = 500;
+//	goals->g[1]->attr = 1;
+//	goals->g[1]->num = 650;
+//	goals->g[2]->attr = 2;
+//	goals->g[2]->num = 550;
+//	goals->g[3]->attr = 3;
+//	goals->g[3]->num = 250;
+//	goals->g[4]->attr = 4;
+//	goals->g[4]->num = 200;
+//	goals->g[5]->attr = 5;
+//	goals->g[5]->num = 800;
 
 	all_goals = goals;
 	init_attrmap();
