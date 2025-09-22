@@ -1,0 +1,3 @@
+[submodule "libvalkey"]
+	path = libvalkey
+	url = git@github.com:valkey-io/libvalkey.git
