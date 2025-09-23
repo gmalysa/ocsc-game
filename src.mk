@@ -1,5 +1,6 @@
 
 subdirs-y := libgjm
+subdirs-y += server
 
 src-greed-y := greed.c
 apps-y += greed
