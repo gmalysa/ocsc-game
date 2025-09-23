@@ -15,16 +15,17 @@
 #define MAX_ATTR 10
 #define MAX_GOALS 10
 
-static char *gameid = "8df86f43-97d5-4b79-a91c-561865463c0e";
+static char *userid = "f9876829-7686-4dc3-91e6-f62a3dac9031";
+static char gameid[40];
 static uint32_t personid = 0;
 static bool first = true;
 
 // Table of probability values here, in order of attributes as set up
 // in the table below
 
-// Scenario 1
+// Game 0
 static float __p[] = {
-	0.3225f, 0.3225f,
+	0.361586f, 0.411255f
 };
 // Scenario 2
 //static float __p[] = {
@@ -36,10 +37,10 @@ static float __p[] = {
 //};
 
 // Correlation matrix, with indices matching the order set up in the table below
-// Scenario 1
+// Game 0
 static float __r[2][2] = {
-	{1.0f, 0.18304299322063f},
-	{0.18304299322063f, 1.0f},
+	{1.0f, 0.781504f},
+	{0.781504f, 1.0f},
 };
 // Scenario 2
 //static float __r[4][4] = {
@@ -409,47 +410,17 @@ size_t save_body(char *ptr, size_t size, size_t nmemb, void *data) {
 	return nmemb*size;
 }
 
-uint64_t str2attr(const char *s) {
-	// Scenario 1
-	if (strncmp(s, "young", 5) == 0)
-		return 0;
-	if (strncmp(s, "well_dressed", 12) == 0)
-		return 1;
-
-	// Scenario 2
-	if (strncmp(s, "techno_lover", 12) == 0)
-		return 0;
-	if (strncmp(s, "well_connected", 14) == 0)
-		return 1;
-	if (strncmp(s, "creative", 8) == 0)
-		return 2;
-	if (strncmp(s, "berlin_local", 12) == 0)
-		return 3;
-
-	// Scenario 3
-	if (strncmp(s, "underground_veteran", 19) == 0)
-		return 0;
-	if (strncmp(s, "international", 13) == 0)
-		return 1;
-	if (strncmp(s, "fashion_forward", 15) == 0)
-		return 2;
-	if (strncmp(s, "queer_friendly", 14) == 0)
-		return 3;
-	if (strncmp(s, "vinyl_collector", 15) == 0)
-		return 4;
-	if (strncmp(s, "german_speaker", 14) == 0)
-		return 5;
-
-	ERROR("unknown attr starting at %10s", s);
-	dump_exit();
-	return 10000;
-}
-
 bool parse_person(struct person *p, bool first) {
 	char *s;
-	uint32_t nextid;
+	uint32_t current;
 
 	ERROR("current body: %s\n", body);
+
+	s = strstr(body, "\"error\"");
+	if (s) {
+		DEBUG("received an error reply: %s\n", body);
+		dump_exit();
+	}
 
 	s = strstr(body, "\"status\"");
 	s = s + 9;
@@ -462,53 +433,38 @@ bool parse_person(struct person *p, bool first) {
 		return false;
 	}
 
-	// Find next person and opening {
-	s = strstr(s, "\"nextPerson\"");
-	while (*s && *s != '{')
-		s++;
-
-	// Get the personIndex field underneath it and parse the id
-	s = strstr(s, "\"personIndex\"");
+	// Double check that we agree on how many were admitted
+	s = strstr(s, "\"count\"");
 	while (!isdigit(*s))
 		s++;
 
-	nextid = atoi(s);
-	if (!first && nextid != personid + 1) {
-		ERROR("expected personid %u, got %u\n", personid+1, nextid);
+	current = atoi(s);
+	if (!first) {
+		if (current != personid + 1) {
+			ERROR("expected count %u, got %u\n", personid, current);
+			dump_exit();
+		}
+	}
+	else if (current != 0) {
+		ERROR("expected first person's count of 0 got %u\n", current);
 		dump_exit();
 	}
-	else if (first && nextid != 0) {
-		ERROR("first person should be id %u, got %u\n", 0, nextid);
-	}
-	personid = nextid;
 
-	// iterate over which attributes are set
-	s = strstr(s, "\"attributes\"");
-	while (*s != '{')
+	personid = current;
+
+	// Read attributes for next patron
+	s = strstr(s, "\"next\"");
+	while (!isdigit(*s))
 		s++;
 
-	// reset attributes
 	p->n = 0;
 
-	while (*s != '}') {
-		while (!isalpha(*s))
-			s++;
-		nextid = str2attr(s);
-		s = strstr(s, ":");
-		while (!isalpha(*s))
-			s++;
-
-		if (strncmp(s, "true", 4) == 0) {
-			s = s + 4;
-			p->attr[p->n] = nextid;
+	current = atoi(s);
+	for (size_t i = 0; i < MAX_ATTR; ++i) {
+		if (is_flag_set(current, BIT(i))) {
+			p->attr[p->n] = i;
 			p->n += 1;
 		}
-		else {
-			s = s + 5;
-		}
-
-		while (isspace(*s))
-			s++;
 	}
 
 	DEBUG("new person received with %zu attributes:", p->n);
@@ -520,18 +476,44 @@ bool parse_person(struct person *p, bool first) {
 	return true;
 }
 
+void new_game(void) {
+	char urlbuf[256];
+	char *s;
+	char *e;
+	CURLcode res;
+
+	snprintf(urlbuf, sizeof(urlbuf),
+		"http://localhost:8124/game/new-game?user=%s&type=0",
+		userid);
+
+	curl_easy_setopt(curl, CURLOPT_URL, urlbuf);
+	res = curl_easy_perform(curl);
+
+	if (res != CURLE_OK) {
+		ERROR("failed to start new game CURLcode = %d\n", res);
+		dump_exit();
+	}
+
+	s = strstr(body, "\"id\"");
+	s = strstr(s, ":");
+	s = strstr(s, "\"") + 1;
+	e = strstr(s, "\"");
+	strncpy(gameid, s, e-s);
+	DEBUG("new game uuid: %s\n", gameid);
+}
+
 bool get_person(struct person *p, bool action, bool first) {
 	char urlbuf[256];
 	CURLcode res;
 
 	if (first) {
 		snprintf(urlbuf, sizeof(urlbuf),
-		"https://berghain.challenges.listenlabs.ai/decide-and-next?gameId=%s&personIndex=%d",
+		"http://localhost:8124/game/process-person?game=%s&person=%d",
 		gameid, personid);
 	}
 	else {
 		snprintf(urlbuf, sizeof(urlbuf),
-		"https://berghain.challenges.listenlabs.ai/decide-and-next?gameId=%s&personIndex=%d&accept=%s",
+		"http://localhost:8124/game/process-person?game=%s&person=%d&verdict=%s",
 			gameid, personid, action ? "true" : "false");
 	}
 
@@ -551,38 +533,17 @@ bool get_person(struct person *p, bool action, bool first) {
 int main(int argc, char **argv) {
 	bool choice;
 	struct person p;
-	struct goals *goals = alloc_goals(6);
+	struct goals *goals = alloc_goals(2);
 	goals->space = 1000;
+
+	UNUSED(argc);
+	UNUSED(argv);
 
 	// Scenario 1
 	goals->g[0]->attr = 0;
 	goals->g[0]->num = 600;
 	goals->g[1]->attr = 1;
 	goals->g[1]->num = 600;
-
-	// Scenario 2
-//	goals->g[0]->attr = 0;
-//	goals->g[0]->num = 650;
-//	goals->g[1]->attr = 1;
-//	goals->g[1]->num = 450;
-//	goals->g[2]->attr = 2;
-//	goals->g[2]->num = 300;
-//	goals->g[3]->attr = 3;
-//	goals->g[3]->num = 750;
-
-	// Scenario 3
-//	goals->g[0]->attr = 0;
-//	goals->g[0]->num = 500;
-//	goals->g[1]->attr = 1;
-//	goals->g[1]->num = 650;
-//	goals->g[2]->attr = 2;
-//	goals->g[2]->num = 550;
-//	goals->g[3]->attr = 3;
-//	goals->g[3]->num = 250;
-//	goals->g[4]->attr = 4;
-//	goals->g[4]->num = 200;
-//	goals->g[5]->attr = 5;
-//	goals->g[5]->num = 800;
 
 	all_goals = goals;
 	init_attrmap();
@@ -597,10 +558,11 @@ int main(int argc, char **argv) {
 
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, save_body);
 
+	new_game();
+
 	choice = false;
 	while (true) {
 		if (!get_person(&p, choice, first)) {
-			DEBUG("done!\n");
 			dump_exit();
 		}
 
