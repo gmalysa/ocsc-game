@@ -35,6 +35,21 @@ enum MHD_Result web_bad_arg(struct MHD_Connection *conn, const char *name) {
 	return MHD_queue_response(conn, MHD_HTTP_OK, web_reply_json(msg));
 }
 
+enum MHD_Result web_set_cookie(struct MHD_Response *resp, const char *cookie,
+	const char *value)
+{
+	// Expire a year from now surely nobody will be playing that long
+	time_t exptime = time(NULL) + (3600*24*365);
+	struct tm *gmt = gmtime(&exptime);
+	char expires[64];
+	char msg[128];
+
+	strftime(expires, sizeof(expires), "%a, %d %b %Y %H:%M:%S GMT", gmt);
+	snprintf(msg, sizeof(msg), "%s=%s; Expires=%s; Path=/",
+		cookie, value, expires);
+	return MHD_add_response_header(resp, "Set-Cookie", msg);
+}
+
 enum MHD_Result web_send_error(struct MHD_Connection *conn, error_t * __mine err) {
 	struct ioport *iop;
 	char msg[128];
@@ -113,8 +128,9 @@ enum MHD_Result web_new_user(struct MHD_Connection *conn) {
 		goto fail_valkey;
 
 	snprintf(msg, sizeof(msg), "{\"uuid\":\"%s\"}", user.name);
-	resp = MHD_create_response_from_buffer(strlen(msg), msg, MHD_RESPMEM_MUST_COPY);
-	MHD_add_response_header(resp, "Content-Type", "application/json");
+	resp = web_reply_json(msg);
+	web_set_cookie(resp, "userid", user.name);
+	web_set_cookie(resp, "userdisplay", user.realname);
 
 	freeReplyObject(reply);
 	release_valkey(vk);
@@ -176,10 +192,12 @@ void format_game(char *buf, size_t len, struct game_t *game) {
 			status = "completed";
 		else
 			status = "failed";
+		snprintf(buf, len, "{\"status\":\"%s\",\"count\":%d}", status, game->count);
 	}
-
-	snprintf(buf, len, "{\"status\":\"%s\",\"count\":%d,\"next\":%d}",
-		status, game->count, game->next);
+	else {
+		snprintf(buf, len, "{\"status\":\"%s\",\"count\":%d,\"next\":%d}",
+			status, game->count, game->next);
+	}
 }
 
 enum MHD_Result web_process_person(struct MHD_Connection *conn) {
@@ -296,6 +314,58 @@ enum MHD_Result web_process_game_details(struct MHD_Connection *conn) {
 	return MHD_queue_response(conn, MHD_HTTP_OK, resp);
 }
 
+enum MHD_Result web_symbols(struct MHD_Connection *conn) {
+	const char *game_arg;
+	uuid_t gameid;
+	struct MHD_Response *resp;
+	struct ioport *iop;
+	char *msg;
+	size_t msglen;
+	size_t i;
+	error_t *ret;
+	struct game_t game = {0};
+
+	game_arg = MHD_lookup_connection_value(conn, MHD_GET_ARGUMENT_KIND, "game");
+	if (!game_arg)
+		return web_bad_arg(conn, "game");
+
+	if (uuid_parse(game_arg, gameid) == 0) {
+		ret = find_game(gameid, &game);
+		if (NOT_OK(ret)) {
+			error_free(ret);
+			return web_bad_arg(conn, "game");
+		}
+	}
+	else {
+		uint32_t id = atoi(game_arg);
+		ret = find_game_by_id(id, &game);
+		if (NOT_OK(ret)) {
+			error_free(ret);
+			return web_bad_arg(conn, "game");
+		}
+	}
+
+	// Approximate guess at buffer size, make it larger if there are failures
+	// Note that each symbol is a uint8_t currently so we need at most 3 digits
+	// plus a space (=4) for each one
+	msglen = 128 + 4*game.count;
+	msg = calloc(msglen, sizeof(*msg));
+	iop = iop_alloc_fixstr(msg, msglen);
+
+	iop_printf(iop, "{\"count\":%d,\"symbols\":[", game.count);
+	for (i = 0; i < game.count-1; ++i) {
+		iop_printf(iop, "%d,", game.seen[i]);
+	}
+	iop_printf(iop, "%d]}", game.seen[game.count-1]);
+
+	resp = web_reply_json(msg);
+	free(msg);
+	iop_free(iop);
+	release_game(&game);
+
+	return MHD_queue_response(conn, MHD_HTTP_OK, resp);
+}
+
 /**
  * Handle a new request, each of these is called in its own thread by the
  * MHD internals for now
@@ -313,17 +383,20 @@ enum MHD_Result web_entry(void *context, struct MHD_Connection *conn, const char
 	if (!STRING_EQUALS(method, "GET"))
 		return MHD_NO;
 
-	if (STRING_EQUALS(url, "/game/new-user"))
+	if (STRING_EQUALS(url, "/new-user"))
 		return web_new_user(conn);
 
-	if (STRING_EQUALS(url, "/game/new-game"))
+	if (STRING_EQUALS(url, "/new-game"))
 		return web_new_game(conn);
 
-	if (STRING_EQUALS(url, "/game/process-person"))
+	if (STRING_EQUALS(url, "/process-person"))
 		return web_process_person(conn);
 
-	if (STRING_EQUALS(url, "/game/details"))
+	if (STRING_EQUALS(url, "/details"))
 		return web_process_game_details(conn);
+
+	if (STRING_EQUALS(url, "/symbols"))
+		return web_symbols(conn);
 
 	DEBUG("failed to match any routes for %s\n", url);
 	return MHD_NO;
