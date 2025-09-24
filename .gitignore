@@ -1,5 +1,6 @@
 .*swp
 build/
+check
 greed
 greed-test
 berghain-server
