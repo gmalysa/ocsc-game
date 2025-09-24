@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Online Stochastic Constraint Satisfaction</title>
+<link rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css"
+	  integrity="sha512-NhSC1YmyruXifcj/KFRWoC561YpHpc5Jtzgvbuzx5VozKpWvQ+4nXhPdFgmx8xqexRcpAglTj9sIBWINXa8x5w=="
+	  crossorigin="anonymous"
+	  referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="/ocs.css" />
+  <script type="text/javascript" src="/ocs.js"></script>
+</head>
+<body>
+
+<h2>Background</h2>
+<p>Consider a sequence of i.i.d. binary valued random vectors, X[n], with known marginal
+probabilities p(x_i) and known correlation matrix Q but unknown joint probability
+distribution. Design an online algorithm--that is, one that renders a decision for a
+sequence element X[n] before it receives X[n+1]--to classify each X[n] as accepted or
+rejected so that the first K accepted vectors satisfy a set of constraints while
+minimizing the number of rejected vectors, n-K.</p>
+<p><a href="https://berghain.challenges.listenlabs.ai/">Listen Labs</a> recently held
+a contest setting this problem to the theme of being a Berghain nightclub bouncer, where
+guests arrive with flavored attributes and the player must admit or reject each patron
+with the goal of filling the nightclub with K=1000 people, while satisfying several lower
+bound constraints on the number of patrons with each flavor attribute admitted.</p>
+<p>That version was too easy and the scoring failed to differentitate between good and
+bad algorithms by considering only the absolute number of rejected patrons, rather than
+the difference between how many were rejected and how many an optimal offline algorithm
+would have rejected, because not all sequences generated will have the same minimum.</p>
+<p>Here we introduce more complicated goals including both upper and lower bounds as
+well as derived bounds, such as 2|x_1| < |x_2| where |.| is the number of accepted
+vectors where variable . is 1. In the interest of reducing this further to a math problem
+and streamlining the interface, we also drop all flavor text and encode the binary
+vectors directly as an integer, referring to each as a symbol or sequence member rather
+than a patron.</a>
+
+<h2>Playing</h2>
+<p>Sign up with a display name in order to receive a user UUID, which is how you will
+make requests to the game server.</p>
+<p id="userinfo" class="indent"></p>
+<p>The game operates through HTTP GET requests, with all parameters encoded as GET
+arguments and all responses presented as JSON objects. This violates all kinds of design
+principles such as GET not requests producing side effects, but it has the benefit of
+being extremely simple to interact with and implement as a server. You will make one
+GET request to start a game and receive a game UUID, then you will use this UUID to
+request new symbols and accept or reject pending symbols.</p>
+
+<h2>API</h2>
+<p>The basic game API is:</p>
+
+<div class="api_container">
+<span class="highlight">/game/new-game?user=<span name="user_uuid"></span>&type=0</span>
+ <div class="indent">
+  <div>Arguments:
+    <div class="indent"><span class="highlight">user</span> uuid of the user playing</div>
+    <div class="indent"><span class="highlight">type</span> game type id</div>
+  </div>
+  <div>Response:
+    <div class="indent"><span class="highlight">{"id":"game uuid here"}</span></div>
+  </div>
+  <div>Description:
+    <div class="indent">
+  This creates a new game of the given type. The game type determines the probability
+  distribution used and the goals that must be satisfied. Game types and their parameters
+  can be obtained XXXXXXX
+    </div>
+  </div>
+ </div>
+</div>
+
+<div class="api_container">
+<span class="highlight">/game/process-person?game=df88afc9-b45e-4005-be23-853f34486cc9&person=0&verdict=true</span>
+ <div class="indent">
+  <div>Arguments:
+    <div class="indent"><span class="highlight">game</span> uuid of the game</div>
+	<div class="indent"><span class="highlight">person</span> # of person considered</div>
+	<div class="indent"><span class="highlight">verdict</span> <b>optional</b>, true to accept this person and false to reject</div>
+  </div>
+  <div>Response:
+    <div class="indent"><span class="highlight">{"status":"running","count":0,"next":0}</span> indicating no symbols have been processed and the next arrival has no attributes</div>
+	<div class="indent"><span class="highlight">{"status":"running","count":1,"next":3}</span> indicating one symbol has been processed and the next arrival has attributes 0 and 1 set</div>
+	<div class="indent"><span class="highlight">{"status":"completed","count":1546}</span> indicating that 1000 symbols have been accepted (of 1546 total) and all constraints are satisfied</div>
+	<div class="indent"><span class="highlight">{"status":"failed","count":1000}</span> indicating that 1000 symbols have been accepted (of 1000 total) but not all constraints were satisfied</div>
+  </div>
+  <div>Description:
+    <div class="indent">
+	This either retrieves the next sequence element (when <span class="highlight">verdict
+	</span> is omitted) or processes the next sequence element and then retrieves the
+	next, next sequence element (when <span class="highlight">verdict</span> is provided)
+	</div>
+  </div>
+ </div>
+</div>
+
+<div class="api_container">
+<span class="highlight">/game/details?game=509a80bb-547a-4f55-92ed-815888b85331</span>
+  <div class="indent">
+    <div>Arguments:
+	 <div class="indent"><span class="highlight">game</span> uuid or integer id of game</div>
+	</div>
+	<div>Response:
+	  <div class="indent"><span class="highlight">{"count":1000,"accepted":1000,"next":0,"attrs":[365,415,0,0,0,0,0],"type":0,"finished":true,"won":false}</span></div>
+	</div>
+	<div>Description:
+	  <div class="indent">
+	  This retrieves summary information about a game including how many symbols
+	  have been seen (count), how many were accepted (accepted), what symbol is next if
+	  any (next), how many symbols with each attribute (element of attrs) have been
+	  accepted, what parameters are used (type), whether the game has ended (finished),
+	  and whether the constraints were met (won). The number rejected must be computed
+	  from the number seen and the number accepted. Note that this request does not
+	  include all of the symbols seen, as that is found in /game/symbols, since the
+	  complete list of symbols is not needed to show summary info and can be obtained
+	  later for a detailed look at a particular game.
+	  </div>
+	</div>
+  </div>
+</div>
+
+<div class="api_container">
+<span class="highlight">/game/symbols?game=509a80bb-547a-4f55-92ed-815888b85331</span>
+  <div class="indent">
+    <div>Arguments:
+	 <div class="indent"><span class="highlight">game</span> uuid or integer id of game</div>
+	</div>
+	<div>Response:
+	 <div class="indent"><span class="highlight">{"count":1000,"symbols":[131,128,128,128,...,131]}</span></div>
+	</div>
+	<div>Description:
+	  <div class="indent">
+	  This retrieves the list of symbols that were seen plus the total expected length of
+	  that list. Currently, bits 0-6 encode each of the possible binary variables and
+	  bit 7 is set when the symbol was accepted or unset when it was rejected.
+	</div>
+  </div>
+</div>
+
+<div class="api_container">
+<span class="highlight">/game/params?type=0</span>
+  <div class="indent">
+    <div>Arguments:
+	 <div class="indent"><span class="highlight">type</span> optional, game type id</div>
+	</div>
+	<div>Response:
+	 <div class="indent"><span class="highlight">{"rulesets":2}</span> when type is omitted</div>
+	 <div class="indent"><span class="highlight">{"type":0,"p":[0.361837,0.411532],"Q":[1.000000,0.781293,0.781293,1.000000]}</span> when type is included</div>
+	</div>
+	<div>Description:
+	 <div class="indent">
+	 This retrieves game parameters for a specific type of game. p contains the marginal
+	 probabilities for each bit that may be set in a particular symbol, and Q is the
+	 square correlation matrix between the possible attributes. Currently, p is
+	 calculated based on the model used to generate attributes, but Q is measured by
+	 generating 10 million symbols and calculating the correlation between each. This
+	 means that Q will appear to change between server restarts, but the underlying model
+	 will not change! If/when a closed-form solution is obtained for Q that will be used
+	 instead.
+	 </div>
+	</div>
+  </div>
+</div>
+
+<div class="api_container">
+Errors:
+  <div class="indent">If an error happens, the response will generatelly be a JSON object
+  with a single field named error, such as
+  <span class="highlight">{"error":"bad or missing arg type"}</span>. Ideally the error
+  message will tell you what you did wrong but this isn't guaranteed. If you're missing a
+  GET argument, the name of the argument will be given like in the example. If there was
+  a database error it will probably just say 'valkey error' with nothing that can help
+  you.
+  </div>
+</div>
+
+</body>
+</html>
