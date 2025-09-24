@@ -1,8 +1,8 @@
 CFG_TESTAPP := greed-test
 
-CC := clang
+CC := gcc
 
-DEBUG := -ggdb -O0
+DEBUG := -ggdb -O2
 #LTO := -flto
 
 CFLAGS += -Wall -Wextra -O2 $(CFLAGS_LIBGJM) $(LTO) $(DEBUG)
