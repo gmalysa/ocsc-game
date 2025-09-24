@@ -174,10 +174,10 @@ int main(int argc, char **argv) {
 	}
 
 	check_normals();
-	printf("\n----\n\n");
-	measure_covariance(0, get_game_params(0));
-	printf("\n----\n\n");
-	measure_covariance(1, get_game_params(1));
+	for (size_t i = 0; i < get_number_of_games(); ++i) {
+		printf("\n----\n\n");
+		measure_covariance(i, get_game_params(i));
+	}
 
 	return 0;
 }

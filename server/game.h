@@ -90,6 +90,7 @@ bool game_is_finished(struct game_t *game);
 void get_normals(double *a, double *b);
 uint32_t generate_attributes(size_t n, double *t, double *a);
 struct game_params_t *get_game_params(int type);
+size_t get_number_of_games(void);
 
 error_t *new_game(int type, struct user_t *user, struct game_t *dest);
 error_t *create_next_person(struct game_t *game);

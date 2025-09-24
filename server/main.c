@@ -20,6 +20,8 @@
 #include "game.h"
 #include "valkey.h"
 
+#define GAME_PORT 8124
+
 struct MHD_Response *web_reply_json(char *msg) {
 	struct MHD_Response *reply;
 	reply = MHD_create_response_from_buffer(strlen(msg), msg, MHD_RESPMEM_MUST_COPY);
@@ -367,6 +369,57 @@ enum MHD_Result web_symbols(struct MHD_Connection *conn) {
 }
 
 /**
+ * Retrieve either number of game rule sets available or the rules for a specific
+ * type of game
+ */
+enum MHD_Result web_params(struct MHD_Connection *conn) {
+	const char *type_arg;
+	size_t n, i, buflen;
+	char *buf;
+	struct ioport *iop;
+	int type;
+	struct game_params_t *params;
+	struct MHD_Response *resp;
+
+	type_arg = MHD_lookup_connection_value(conn, MHD_GET_ARGUMENT_KIND, "type");
+	if (!type_arg) {
+		char msg[128];
+		snprintf(msg, sizeof(msg), "{\"rulesets\":%zu}", get_number_of_games());
+		return MHD_queue_response(conn, MHD_HTTP_OK, web_reply_json(msg));
+	}
+
+	type = atoi(type_arg);
+	params = get_game_params(type);
+	if (!params)
+		return web_bad_arg(conn, "type");
+
+	// Approximate buffer length expected to hold a set of game parameters, if
+	// the games get bigger make this estimate larger:
+	// up to 9 digits per double value + comma, with n marginals and n^2 covariances
+	// + 64 bytes for labels + json padding
+	n = params->rng_params.n;
+	buflen = 64 + 9*n + 9*n*n;
+	buf = calloc(buflen, sizeof(*buf));
+	iop = iop_alloc_fixstr(buf, buflen);
+
+	iop_printf(iop, "{\"type\":%d,\"p\":[", type);
+	for (i = 0; i < n-1; ++i) {
+		iop_printf(iop, "%0.6f,", params->dist_params.marginals[i]);
+	}
+	iop_printf(iop, "%0.6f],\"Q\":[", params->dist_params.marginals[n-1]);
+
+	for (i = 0; i < n*n-1; ++i) {
+		iop_printf(iop, "%0.6f,", params->dist_params.corr[i]);
+	}
+	iop_printf(iop, "%0.6f]}", params->dist_params.corr[n*n-1]);
+
+	iop_free(iop);
+	resp = web_reply_json(buf);
+	free(buf);
+	return MHD_queue_response(conn, MHD_HTTP_OK, resp);
+}
+
+/**
  * Handle a new request, each of these is called in its own thread by the
  * MHD internals for now
  */
@@ -397,6 +450,9 @@ enum MHD_Result web_entry(void *context, struct MHD_Connection *conn, const char
 
 	if (STRING_EQUALS(url, "/symbols"))
 		return web_symbols(conn);
+
+	if (STRING_EQUALS(url, "/params"))
+		return web_params(conn);
 
 	DEBUG("failed to match any routes for %s\n", url);
 	return MHD_NO;
@@ -429,7 +485,7 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 
-	daemon = MHD_start_daemon(MHD_USE_INTERNAL_POLLING_THREAD,  8124, NULL, NULL,
+	daemon = MHD_start_daemon(MHD_USE_INTERNAL_POLLING_THREAD, GAME_PORT, NULL, NULL,
 		&web_entry, NULL, MHD_OPTION_END);
 	if (!daemon) {
 		ERROR("failed to start mhd daemon\n");

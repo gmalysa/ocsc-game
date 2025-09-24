@@ -8,85 +8,92 @@
 // Number of warm up loops to use with WELL before running games off it
 #define RNG_INIT_LOOPS 1000
 
+// Number of symbols to generate in order to measure attribute statistics
+#define ATTR_STAT_COUNT 10000000
+
 static pthread_spinlock_t rng_lock;
 static struct well_state_t rng = {0};
 
-static struct game_params_t game_params0 = {
-	.rng_params = {
-		.n = 2,
-		.t = (double[]) {0.5, 0.5},
-		.a = (double[]) {1.0, 1.0,
-		                 1.0, 2.0},
+static struct game_params_t game_params[] = {
+	{
+		.rng_params = {
+			.n = 2,
+			.t = (double[]) {0.5, 0.5},
+			.a = (double[]) {1.0, 1.0,
+							 1.0, 2.0},
+		},
+		.dist_params = {
+			.marginals = (double[2]) {0},
+			.corr = (double[4]) {0},
+		},
+		.goals = (struct goal_t[]) {
+			{
+				.params = GOAL_PARAMS(
+							GOAL_OPER_GE,
+							GOAL_ATTR(0),
+							GOAL_VALUE(600))
+			}, {
+				.params = GOAL_PARAMS(
+							GOAL_OPER_GE,
+							GOAL_ATTR(1),
+							GOAL_VALUE(600))
+			}
+		},
+		.n_goals = 2,
+	}, {
+		.rng_params = {
+			.n = 4,
+			.t = (double[]) {0.75, 0.2, 0.4, 0.7},
+			.a = (double[]) {1.0, 0.0, 0.0,  0.0,
+							 0.0, 1.0, 2.0, -2.0,
+							 0.0, 0.0, 1.0, -1.0,
+							 0.0, 0.0, 0.0,  1.0},
+		},
+		.dist_params = {
+			.marginals = (double[4]) {0},
+			.corr = (double[16]) {0},
+		},
+		.goals = (struct goal_t[]) {
+			{
+				.params = GOAL_PARAMS(
+							GOAL_OPER_GE,
+							GOAL_ATTR(1),
+							GOAL_OPER_DIV,
+							GOAL_ATTR(0),
+							GOAL_VALUE(2))
+			}, {
+				.params = GOAL_PARAMS(
+							GOAL_OPER_GE,
+							GOAL_ATTR(2),
+							GOAL_OPER_DIV,
+							GOAL_ATTR(3),
+							GOAL_VALUE(2))
+
+			}
+		},
+		.n_goals = 2,
 	},
-	.dist_params = {
-		.marginals = (double[2]) {0},
-		.corr = (double[4]) {0},
-	},
-	.goals = (struct goal_t[]) {
-		{
-			.params = GOAL_PARAMS(
-						GOAL_OPER_GE,
-						GOAL_ATTR(0),
-						GOAL_VALUE(600))
-		}, {
-			.params = GOAL_PARAMS(
-						GOAL_OPER_GE,
-						GOAL_ATTR(1),
-						GOAL_VALUE(600))
-		}
-	},
-	.n_goals = 2,
 };
 
-static struct game_params_t game_params1 = {
-	.rng_params = {
-		.n = 4,
-		.t = (double[]) {0.75, 0.2, 0.4, 0.7},
-		.a = (double[]) {1.0, 0.0, 0.0,  0.0,
-		                 0.0, 1.0, 2.0, -2.0,
-						 0.0, 0.0, 1.0, -1.0,
-						 0.0, 0.0, 0.0,  1.0},
-	},
-	.dist_params = {
-		.marginals = (double[4]) {0},
-		.corr = (double[16]) {0},
-	},
-	.goals = (struct goal_t[]) {
-		{
-			.params = GOAL_PARAMS(
-						GOAL_OPER_GE,
-						GOAL_ATTR(1),
-						GOAL_OPER_DIV,
-						GOAL_ATTR(0),
-						GOAL_VALUE(2))
-		}, {
-			.params = GOAL_PARAMS(
-						GOAL_OPER_GE,
-						GOAL_ATTR(2),
-						GOAL_OPER_DIV,
-						GOAL_ATTR(3),
-						GOAL_VALUE(2))
-
-		}
-	},
-	.n_goals = 2,
-};
+static size_t n_games = ARRAY_SIZE(game_params);
 
 /**
  * @todo this needs th closed form expression for the correlation
  */
 static void assign_dist_params(struct game_params_t *params) {
-	size_t i, j;
+	size_t i, j, k;
 	size_t n = params->rng_params.n;
+	double *vec, *mean, *Q;
+	uint32_t *attrs;
 
- /*
-  * The marginal probability that an attirbute is set is:
-  * p(X = 1) = Pr(sum(a_i*x_i) > t) = 1 - Pr(sum(...) <= t)
-  * A linear combination of normally distributed random variables is normally
-  * distributed with variance = sum(a_i^2 * var(x_i)), so Pr(sum(...) <= t) can be
-  * found in the marginal case as: F(t / sqrt(sum(a_i^2))). Or in terms of C primitives,
-  * p(X = 1) = 0.5 - 0.5*erf(t / sqrt(2*sum(a_i^2)))
-  */
+	/*
+	 * The marginal probability that an attirbute is set is:
+	 * p(X = 1) = Pr(sum(a_i*x_i) > t) = 1 - Pr(sum(...) <= t)
+	 * A linear combination of normally distributed random variables is normally
+	 * distributed with variance = sum(a_i^2 * var(x_i)), so Pr(sum(...) <= t) can be
+	 * found in the marginal case as: F(t / sqrt(sum(a_i^2))). Or in terms of C primitives,
+	 * p(X = 1) = 0.5 - 0.5*erf(t / sqrt(2*sum(a_i^2)))
+	 */
 	for (i = 0; i < n; ++i) {
 		double sum = 0;
 		for (j = 0; j < n; ++j) {
@@ -96,6 +103,73 @@ static void assign_dist_params(struct game_params_t *params) {
 		params->dist_params.marginals[i] =
 			0.5*(1 - erf(params->rng_params.t[i] / sqrt(2*sum)));
 	}
+
+	/*
+	 * The correlation has not been computed in closed form yet so
+	 * we generate a large number of instances of the attributes and
+	 * then compute their statistics. Hopefully this will change in
+	 * the near future
+	 */
+	attrs = calloc(ATTR_STAT_COUNT, sizeof(*attrs));
+	ASSERT(attrs);
+
+	mean = calloc(n, sizeof(*mean));
+	ASSERT(mean);
+
+	vec = calloc(n, sizeof(*vec));
+	ASSERT(vec);
+
+	Q = calloc(n*n, sizeof(*Q));
+	ASSERT(Q);
+
+	for (i = 0; i < ATTR_STAT_COUNT; ++i) {
+		attrs[i] = generate_attributes(params->rng_params.n,
+			params->rng_params.t, params->rng_params.a);
+	}
+
+	// E[x] for each attribute in mean
+	for (i = 0; i < ATTR_STAT_COUNT; ++i) {
+		for (j = 0; j < n; ++j) {
+			if (is_flag_set(attrs[i], BIT(j)))
+				mean[j] += 1;
+		}
+	}
+	for (i = 0; i < n; ++i) {
+		mean[i] = mean[i] / ATTR_STAT_COUNT;
+	}
+
+	// Covariance matrix estimated using the sample covariance
+	// 1/(n-1) sum (X-E[X])(X-E[X])^T
+	for (i = 0; i < ATTR_STAT_COUNT; ++i) {
+		for (j = 0; j < n; ++j) {
+			vec[j] = -mean[j];
+			if (is_flag_set(attrs[i], BIT(j)))
+				vec[j] += 1.0;
+		}
+
+		for (j = 0; j < n; ++j) {
+			for (k = 0; k < n; ++k) {
+				Q[n*j + k] += vec[j] * vec[k];
+			}
+		}
+	}
+	for (j = 0; j < n; ++j) {
+		for (k = 0; k < n; ++k) {
+			Q[n*j + k] = Q[n*j + k] / (ATTR_STAT_COUNT-1);
+		}
+	}
+
+	// With fully populated covariance, calculate correlation matrix
+	for (j = 0; j < n; ++j) {
+		for (k = 0; k < n; ++k) {
+			params->dist_params.corr[n*j+k] = Q[n*j+k]/sqrt(Q[n*j+j]*Q[n*k+k]);
+		}
+	}
+
+	free(mean);
+	free(vec);
+	free(Q);
+	free(attrs);
 }
 
 /**
@@ -127,8 +201,9 @@ static void init_rng(void) {
 error_t *init_game(void) {
 	init_rng();
 
-	assign_dist_params(&game_params0);
-	assign_dist_params(&game_params1);
+	for (size_t i = 0; i < n_games; ++i) {
+		assign_dist_params(&game_params[i]);
+	}
 
 	return init_valkey();
 }
@@ -215,16 +290,14 @@ bool valid_game_type(int type) {
 }
 
 struct game_params_t *get_game_params(int type) {
-	switch (type) {
-	case 0:
-		return &game_params0;
-	case 1:
-		return &game_params1;
-//	case 2:
-//		return &game_params2;
-	default:
-		return NULL;
-	}
+	size_t t = (size_t) type;
+	if (t < n_games)
+		return &game_params[t];
+	return NULL;
+}
+
+size_t get_number_of_games(void) {
+	return n_games;
 }
 
 bool game_is_finished(struct game_t *game) {
@@ -274,6 +347,7 @@ error_t *new_game(int type, struct user_t *user, struct game_t *dest) {
 	uuid_t uuid;
 	struct valkey_t *vk;
 	valkeyReply *reply;
+	error_t *ret;
 	char localbuf[128];
 
 	memset(dest, 0, sizeof(*dest));
@@ -281,7 +355,7 @@ error_t *new_game(int type, struct user_t *user, struct game_t *dest) {
 	vk = get_valkey();
 	reply = valkeyCommand(vk->ctx, "INCR next_game");
 	if (!reply || reply->type == VALKEY_REPLY_ERROR)
-		goto fail_reply;
+		goto fail_valkey;
 
 	uuid_generate(uuid);
 	uuid_unparse(uuid, dest->name);
@@ -290,16 +364,21 @@ error_t *new_game(int type, struct user_t *user, struct game_t *dest) {
 	dest->type = type;
 	dest->params = get_game_params(type);
 
+	if (!dest->params) {
+		ret = E_MSG("invalid game type");
+		goto fail_reply;
+	}
+
 	freeReplyObject(reply);
 	reply = valkeyCommand(vk->ctx, "HSET %s id %d userid %d type %d", dest->name,
 		dest->id, user->id, type);
 	if (!reply || reply->type == VALKEY_REPLY_ERROR)
-		goto fail_reply;
+		goto fail_valkey;
 
 	freeReplyObject(reply);
 	reply = valkeyCommand(vk->ctx, "HSET gameids %d %s", dest->id, dest->name);
 	if (!reply || reply->type == VALKEY_REPLY_ERROR)
-		goto fail_reply;
+		goto fail_valkey;
 
 	snprintf(localbuf, sizeof(localbuf), "%s-games", user->name);
 
@@ -307,17 +386,19 @@ error_t *new_game(int type, struct user_t *user, struct game_t *dest) {
 	reply = valkeyCommand(vk->ctx, "LPUSH %s %s\n", localbuf, dest->name);
 	if (!reply || reply->type == VALKEY_REPLY_ERROR) {
 		DEBUG("orphaned game %s, owned by user %s\n", dest->name, user->name);
-		goto fail_reply;
+		goto fail_valkey;
 	}
 
 	freeReplyObject(reply);
 	release_valkey(vk);
 	return create_next_person(dest);
 
+fail_valkey:
+	ret = E_VALKEY(vk->ctx, reply);
 fail_reply:
 	freeReplyObject(reply);
 	release_valkey(vk);
-	return E_MSG("valkey failure");
+	return ret;
 }
 
 bool find_user(uuid_t id, struct user_t *user) {
@@ -377,6 +458,9 @@ error_t *find_game(uuid_t id, struct game_t *dest) {
 			int type = atoi(val->str);
 			dest->params = get_game_params(type);
 			dest->type = type;
+
+			if (!dest->params)
+				goto fail_valkey;
 		}
 		else if (STRING_EQUALS(key->str, "next")) {
 			dest->next = (uint8_t) atoi(val->str);
