@@ -1,3 +1,6 @@
 [submodule "libvalkey"]
 	path = libvalkey
 	url = git@github.com:valkey-io/libvalkey.git
+[submodule "libgjm"]
+	path = libgjm
+	url = git@github.com:gmalysa/libgjm.git
