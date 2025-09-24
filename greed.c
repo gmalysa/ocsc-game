@@ -440,7 +440,7 @@ bool parse_person(struct person *p, bool first) {
 
 	current = atoi(s);
 	if (!first) {
-		if (current != personid + 1) {
+		if (current != personid) {
 			ERROR("expected count %u, got %u\n", personid, current);
 			dump_exit();
 		}
@@ -449,8 +449,6 @@ bool parse_person(struct person *p, bool first) {
 		ERROR("expected first person's count of 0 got %u\n", current);
 		dump_exit();
 	}
-
-	personid = current;
 
 	// Read attributes for next patron
 	s = strstr(s, "\"next\"");
@@ -483,7 +481,7 @@ void new_game(void) {
 	CURLcode res;
 
 	snprintf(urlbuf, sizeof(urlbuf),
-		"http://localhost:8124/game/new-game?user=%s&type=0",
+		"https://localhost/game/new-game?user=%s&type=0",
 		userid);
 
 	curl_easy_setopt(curl, CURLOPT_URL, urlbuf);
@@ -508,13 +506,14 @@ bool get_person(struct person *p, bool action, bool first) {
 
 	if (first) {
 		snprintf(urlbuf, sizeof(urlbuf),
-		"http://localhost:8124/game/process-person?game=%s&person=%d",
+		"https://localhost/game/process-person?game=%s&person=%d",
 		gameid, personid);
 	}
 	else {
 		snprintf(urlbuf, sizeof(urlbuf),
-		"http://localhost:8124/game/process-person?game=%s&person=%d&verdict=%s",
+		"https://localhost/game/process-person?game=%s&person=%d&verdict=%s",
 			gameid, personid, action ? "true" : "false");
+		personid = personid + 1;
 	}
 
 	DEBUG("making request for %s\n", urlbuf);
@@ -557,6 +556,8 @@ int main(int argc, char **argv) {
 	}
 
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, save_body);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
 
 	new_game();
 
