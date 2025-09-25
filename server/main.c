@@ -374,7 +374,8 @@ enum MHD_Result web_symbols(struct MHD_Connection *conn) {
  */
 enum MHD_Result web_params(struct MHD_Connection *conn) {
 	const char *type_arg;
-	size_t n, i, buflen;
+	size_t n, i, j, buflen;
+	size_t np;
 	char *buf;
 	struct ioport *iop;
 	int type;
@@ -396,9 +397,19 @@ enum MHD_Result web_params(struct MHD_Connection *conn) {
 	// Approximate buffer length expected to hold a set of game parameters, if
 	// the games get bigger make this estimate larger:
 	// up to 9 digits per double value + comma, with n marginals and n^2 covariances
+	// up to 6 digits per goal parameter
 	// + 64 bytes for labels + json padding
+	np = 0;
+	for (i = 0; i < params->n_goals; ++i) {
+		j = 0;
+		while (!is_flag_set(params->goals[i].params[j], GOAL_TAIL_BIT)) {
+			j += 1;
+			np += 1;
+		}
+	}
+
 	n = params->rng_params.n;
-	buflen = 64 + 9*n + 9*n*n;
+	buflen = 64 + 9*n + 9*n*n + 6*np;
 	buf = calloc(buflen, sizeof(*buf));
 	iop = iop_alloc_fixstr(buf, buflen);
 
@@ -411,7 +422,22 @@ enum MHD_Result web_params(struct MHD_Connection *conn) {
 	for (i = 0; i < n*n-1; ++i) {
 		iop_printf(iop, "%0.6f,", params->dist_params.corr[i]);
 	}
-	iop_printf(iop, "%0.6f]}", params->dist_params.corr[n*n-1]);
+	iop_printf(iop, "%0.6f],\"goals\":[", params->dist_params.corr[n*n-1]);
+
+	for (i = 0; i < params->n_goals; ++i) {
+		if (i > 0)
+			iop_printf(iop, ",[");
+		else
+			iop_printf(iop, "[");
+
+		j = 0;
+		while (!is_flag_set(params->goals[i].params[j+1], GOAL_TAIL_BIT)) {
+			iop_printf(iop, "%d,", params->goals[i].params[j]);
+			j += 1;
+		}
+		iop_printf(iop, "%d]", params->goals[i].params[j]);
+	}
+	iop_printf(iop, "]}");
 
 	iop_free(iop);
 	resp = web_reply_json(buf);

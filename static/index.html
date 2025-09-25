@@ -58,13 +58,13 @@ request new symbols and accept or reject pending symbols.</p>
     <div class="indent"><span class="highlight">type</span> game type id</div>
   </div>
   <div>Response:
-    <div class="indent"><span class="highlight">{"id":"game uuid here"}</span></div>
+    <div class="indent"><span class="highlight">{"id":"509a80bb-547a-4f55-92ed-815888b85331"}</span></div>
   </div>
   <div>Description:
     <div class="indent">
   This creates a new game of the given type. The game type determines the probability
   distribution used and the goals that must be satisfied. Game types and their parameters
-  can be obtained XXXXXXX
+  can be obtained from the <span class="highlight">/game/params</span> route.
     </div>
   </div>
  </div>
@@ -145,13 +145,24 @@ request new symbols and accept or reject pending symbols.</p>
 	</div>
 	<div>Response:
 	 <div class="indent"><span class="highlight">{"rulesets":2}</span> when type is omitted</div>
-	 <div class="indent"><span class="highlight">{"type":0,"p":[0.361837,0.411532],"Q":[1.000000,0.781293,0.781293,1.000000]}</span> when type is included</div>
+	 <div class="indent"><span class="highlight">{"type":0,"p":[0.361837,0.411532],"Q":[1.000000,0.781522,0.781522,1.000000],"goals":[[8197,4096,600],[8197,4097,600]]}</span> when type is included</div>
 	</div>
 	<div>Description:
 	 <div class="indent">
 	 This retrieves game parameters for a specific type of game. p contains the marginal
 	 probabilities for each bit that may be set in a particular symbol, and Q is the
-	 square correlation matrix between the possible attributes. Currently, p is
+	 square correlation matrix between the possible attributes. goals defines the goals
+	 as expressions encoded one per array. Each term in a goal is a packed bitfield, with
+	 the following convention: bit 13 (8192) indicates that the term is an operator, with
+	 the lower order bits identifying the type of operator: 0 for +, 1 for -, 2 for /,
+	 3 for *, 4 for &lt;, and 5 for &gt;=; bit 12 (4096) indicates that the term is the
+	 current value of an attribute with the lower order bits identifying which one; and
+	 values smaller than 4096 encode constants exactly. Each goal is an expression in
+	 polish notation. The goal <span class="highlight">[8197, 4096, 600]</span> therefore
+	 encodes the expression `&gt;= attr[0] 600` or `attr[0] &gt;= 600` in infix notation.
+	 </div>
+	 <div class="indent">
+	 Currently, p is
 	 calculated based on the model used to generate attributes, but Q is measured by
 	 generating 10 million symbols and calculating the correlation between each. This
 	 means that Q will appear to change between server restarts, but the underlying model
