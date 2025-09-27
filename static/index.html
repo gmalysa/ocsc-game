@@ -14,27 +14,36 @@
 <body>
 
 <h2>Background</h2>
-<p>Consider a sequence of i.i.d. binary valued random vectors, X[n], with known marginal
-probabilities p(x_i) and known correlation matrix Q but unknown joint probability
-distribution. Design an online algorithm--that is, one that renders a decision for a
-sequence element X[n] before it receives X[n+1]--to classify each X[n] as accepted or
-rejected so that the first K accepted vectors satisfy a set of constraints while
-minimizing the number of rejected vectors, n-K.</p>
 <p><a href="https://berghain.challenges.listenlabs.ai/">Listen Labs</a> recently held
-a contest setting this problem to the theme of being a Berghain nightclub bouncer, where
+a contest with a problem set to the theme of being a Berghain nightclub bouncer, where
 guests arrive with flavored attributes and the player must admit or reject each patron
-with the goal of filling the nightclub with K=1000 people, while satisfying several lower
+with the goal of filling the nightclub with 1000 people, while satisfying several lower
 bound constraints on the number of patrons with each flavor attribute admitted.</p>
-<p>That version was too easy and the scoring failed to differentitate between good and
-bad algorithms by considering only the absolute number of rejected patrons, rather than
-the difference between how many were rejected and how many an optimal offline algorithm
-would have rejected, because not all sequences generated will have the same minimum.</p>
-<p>Here we introduce more complicated goals including both upper and lower bounds as
-well as derived bounds, such as 2|x_1| < |x_2| where |.| is the number of accepted
-vectors where variable . is 1. In the interest of reducing this further to a math problem
-and streamlining the interface, we also drop all flavor text and encode the binary
-vectors directly as an integer, referring to each as a symbol or sequence member rather
-than a patron.</a>
+<p>That version was a bit too easy because it considered only static lower bounds, and
+the scoring approach (lowest rejection of all attempts) selected for players who submitted
+many trials, rather than efficiently identifying optimal algorithms.</p>
+<p>Here we introduce a clone of the game with support for more complicated bounds
+structures (plus some easy ones to get warmed up on) along with scoring relative to an
+offline algorithm's rejection count for the same sequence, allowing successful algorithms
+to be identified with significantly fewer trials.</p>
+
+<h2>Problem Statement</h2>
+<p>Consider a i.i.d. sequence of random vectors. Each random vector consists of
+N binary-valued attributes, which can be represented as a single symbol. The PMF of the
+symbols is unknown; instead the marginal probabilities for each attribute and the
+correlation matrix between attributes is known, but the joint distribution of all
+attributes is not. There are at least two reasonable ways to generate symbols in this
+scheme so do not assume a particular generation method.</p>
+<p>The objective of the game is to perform online processing of each symbol in a sequence
+as it is received, classifying it as accepted or as rejected, such that 1000 symbols are
+accepted, a set of scenario-specific constraints is satisfied, and the total sequence
+length observed (equivalently, the number of symbols rejected), is minimized.</p>
+<p>Each game has a set of known distribution parameters as described above and a set of
+constraints, consisting of a relational operator (&gt;= or &lt;) and two arithmetic
+expressions combining constants, number of symbols matching an attribute, and basic
+operators including addition, subtraction, multiplication, and division. A specific
+scenario will use the same parameters each time but will produce a new random sequence.
+</p>
 
 <h2>Playing</h2>
 <p>Sign up with a display name in order to receive a user UUID, which is how you will
@@ -46,6 +55,10 @@ principles such as GET not requests producing side effects, but it has the benef
 being extremely simple to interact with and implement as a server. You will make one
 GET request to start a game and receive a game UUID, then you will use this UUID to
 request new symbols and accept or reject pending symbols.</p>
+
+<h2>Game Status</h2>
+<p>Here there will eventually be an interface to see information about games played,
+grouped by user or by scenario.</p>
 
 <h2>API</h2>
 <p>The basic game API is:</p>
@@ -111,9 +124,10 @@ request new symbols and accept or reject pending symbols.</p>
 	  accepted, what parameters are used (type), whether the game has ended (finished),
 	  and whether the constraints were met (won). The number rejected must be computed
 	  from the number seen and the number accepted. Note that this request does not
-	  include all of the symbols seen, as that is found in /game/symbols, since the
-	  complete list of symbols is not needed to show summary info and can be obtained
-	  later for a detailed look at a particular game.
+	  include all of the symbols seen, as that is found in
+	  <span class="highlight">/game/symbols</span>, since the complete list of symbols is
+	  not needed to show summary info and can be obtained later for a detailed look at a
+	  particular game.
 	  </div>
 	</div>
   </div>
