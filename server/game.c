@@ -18,9 +18,9 @@ static struct game_params_t game_params[] = {
 	{
 		.rng_params = {
 			.n = 2,
-			.t = (double[]) {0.5, 0.5},
-			.a = (double[]) {1.0, 1.0,
-							 1.0, 2.0},
+			.t = (double[]) {0.5, 0.2},
+			.a = (double[]) {1.0, 0.0,
+							 -1.0, 1.0},
 		},
 		.dist_params = {
 			.marginals = (double[2]) {0},
