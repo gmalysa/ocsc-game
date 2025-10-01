@@ -35,14 +35,19 @@ int main(int argc, char **argv) {
 	size_t i, j;
 	bool search;
 	ssize_t rlen;
+	size_t space = sizeof(seq);
+	size_t offset = 0;
 
-	rlen = read(STDIN_FILENO, seq, sizeof(seq));
-	if (rlen >= (ssize_t) sizeof(seq)) {
-		printf("input was much longer than expected, recompile with bigger seq len\n");
-		exit(1);
+	while (space && (rlen = read(STDIN_FILENO, seq + offset, space))) {
+		if (rlen < 0) {
+			printf("error reading from stdin\n");
+			exit(1);
+		}
+		offset += (size_t) rlen;
+		space -= (size_t) rlen;
 	}
 
-	len = (size_t) rlen;
+	len = offset;
 	printf("Read string:\n");
 	printf("  length: %zd\n", len);
 	printf("  rejected: %zd\n", len - 1000);
