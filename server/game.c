@@ -409,15 +409,14 @@ bool find_user(uuid_t id, struct user_t *user) {
 
 	vk = get_valkey();
 	reply = valkeyCommand(vk->ctx, "HMGET %s id name", user->name);
-	if (!reply || reply->type == VALKEY_REPLY_ERROR) {
-		release_valkey(vk);
-		return false;
-	}
+	if (!reply || reply->type == VALKEY_REPLY_ERROR)
+		goto failure;
 
-	if (reply->elements != 2) {
-		release_valkey(vk);
-		return false;
-	}
+	if (reply->elements != 2)
+		goto failure;
+
+	if (reply->element[0]->type != VALKEY_REPLY_STRING)
+		goto failure;
 
 	user->id = reply->element[0]->integer;
 	memset(user->realname, 0, sizeof(user->realname));
@@ -427,6 +426,10 @@ bool find_user(uuid_t id, struct user_t *user) {
 	freeReplyObject(reply);
 	release_valkey(vk);
 	return true;
+
+failure:
+	release_valkey(vk);
+	return false;
 }
 
 error_t *find_game(uuid_t id, struct game_t *dest) {
