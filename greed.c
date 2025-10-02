@@ -492,6 +492,11 @@ void new_game(void) {
 		dump_exit();
 	}
 
+	if (strstr(body, "\"error\"")) {
+		ERROR("failed to start new game: %s\n", body);
+		dump_exit();
+	}
+
 	s = strstr(body, "\"id\"");
 	s = strstr(s, ":");
 	s = strstr(s, "\"") + 1;
