@@ -4,7 +4,7 @@ subdirs-y += server
 
 src-greed-y := greed.c
 apps-y += greed
-greed-ldflags-y = $(LDFLAGS_LIBGJM) -lm -lcurl
+greed-ldflags-y = $(LDFLAGS_LIBGJM) -lm -lcurl -luuid
 
 src-analyze-y := analyze.c
 apps-y += analyze

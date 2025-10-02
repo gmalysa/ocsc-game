@@ -1,10 +1,12 @@
 #include <ctype.h>
+#include <getopt.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <uuid/uuid.h>
 
 #include <curl/curl.h>
 
@@ -14,6 +16,9 @@
 
 #define MAX_ATTR 10
 #define MAX_GOALS 10
+
+static char *host = "localhost";
+static char *proto = "https";
 
 static char *userid = "f9876829-7686-4dc3-91e6-f62a3dac9031";
 static char gameid[40];
@@ -481,8 +486,8 @@ void new_game(void) {
 	CURLcode res;
 
 	snprintf(urlbuf, sizeof(urlbuf),
-		"https://localhost/game/new-game?user=%s&type=0",
-		userid);
+		"%s://%s/game/new-game?user=%s&type=0",
+		proto, host, userid);
 
 	curl_easy_setopt(curl, CURLOPT_URL, urlbuf);
 	res = curl_easy_perform(curl);
@@ -511,13 +516,13 @@ bool get_person(struct person *p, bool action, bool first) {
 
 	if (first) {
 		snprintf(urlbuf, sizeof(urlbuf),
-		"https://localhost/game/process-person?game=%s&person=%d",
-		gameid, personid);
+		"%s://%s/game/process-person?game=%s&person=%d",
+		proto, host, gameid, personid);
 	}
 	else {
 		snprintf(urlbuf, sizeof(urlbuf),
-		"https://localhost/game/process-person?game=%s&person=%d&verdict=%s",
-			gameid, personid, action ? "true" : "false");
+		"%s://%s/game/process-person?game=%s&person=%d&verdict=%s",
+			proto, host, gameid, personid, action ? "true" : "false");
 		personid = personid + 1;
 	}
 
@@ -534,14 +539,53 @@ bool get_person(struct person *p, bool action, bool first) {
 	return parse_person(p, first);
 }
 
+void help(void) {
+	ERROR("\n");
+	ERROR(" Usage: ./greed [-h] [-i] [-6] [-H host]\n");
+	ERROR("\n");
+	ERROR("   -h          Display help information\n");
+	ERROR("   -i          Use http  to connect (default: https)\n");
+	ERROR("   -H host     Connect to host (default: localhost)\n");
+	ERROR("   -6          Use ipv6 to resolve and connect to host\n");
+	ERROR("\n");
+	exit(1);
+}
+
 int main(int argc, char **argv) {
+	uuid_t user_uuid;
+	int opt;
 	bool choice;
-	struct person p;
+	bool ipv6 = false;
 	struct goals *goals = alloc_goals(2);
 	goals->space = 1000;
 
-	UNUSED(argc);
-	UNUSED(argv);
+	while ((opt = getopt(argc, argv, "hi6u:H:")) != -1) {
+		switch (opt) {
+		case 'h': /* fallthrough */
+		default:
+			help();
+			break;
+		case 'i':
+			DEBUG("proto https -> http\n");
+			proto = "http";
+			break;
+		case 'H':
+			DEBUG("connecting to host `%s`\n", optarg);
+			host = optarg;
+			break;
+		case '6':
+			DEBUG("using ipv6 to connect\n");
+			ipv6 = true;
+			break;
+		case 'u':
+			DEBUG("set new userid %s\n", optarg);
+			if (uuid_parse(optarg, user_uuid) < 0) {
+				ERROR("invalid userid `%s` requested--is this a valid uuid?\n", optarg);
+				help();
+			}
+			userid = optarg;
+		}
+	}
 
 	// Scenario 1
 	goals->g[0]->attr = 0;
@@ -561,13 +605,20 @@ int main(int argc, char **argv) {
 	}
 
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, save_body);
+
+	// localhost doesn't have a valid ssl cert but others probably should
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
+
+	if (ipv6)
+		curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V6);
 
 	new_game();
 
 	choice = false;
 	while (true) {
+		struct person p;
+
 		if (!get_person(&p, choice, first)) {
 			dump_exit();
 		}
