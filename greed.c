@@ -271,7 +271,7 @@ bool reject_for_required(struct person *p, struct goals *goals) {
 /**
  * decide what to do for the given person
  */
-bool decide_for(struct person *p, struct goals *goals, bool guess) {
+bool decide_for(struct person *p, struct goals *goals) {
 	struct goals *rest;
 	bool ret;
 
@@ -281,12 +281,6 @@ bool decide_for(struct person *p, struct goals *goals, bool guess) {
 		DEBUG("out of constraints, accepting if we have room\n");
 		return goals->space > 0;
 	}
-
-	// No losers
-//	if (p->n == 0) {
-//		DEBUG("rejected as a loser\n");
-//		return false;
-//	}
 
 	// First check if this person's acceptance would cause us to fail
 	if (reject_for_required(p, goals)) {
@@ -301,32 +295,24 @@ bool decide_for(struct person *p, struct goals *goals, bool guess) {
 	DEBUG("target attr %zd needs %zd of %zd, L = %zd\n", goals->g[0]->attr,
 		goals->g[0]->num, goals->space, goals->g[0]->L);
 
-	// If the hardest remaining goal has no requirements this person is
-	// also a loser
+	// If the hardest remaining goal has no requirements we can take them if
+	// we have space left
 	if (goals->g[0]->num <= 0) {
-		DEBUG("out of constraints, reclassifying as a loser\n");
-//		return false;
+		DEBUG("no goals left and we have room, accepting\n");
 		return goals->space > 0;
 	}
 
 	// They match our hardest goal
 	if (person_has_attr(p, goals->g[0]->attr)) {
-		// When we're guessing, we should still reject some fraction
-		// of these partial matches in order to reduce pressure on the hardest
-		// goal
-//		if (guess) {
-//		}
-//		else {
-			DEBUG("matches attr and we have room, accepting\n");
-			return true;
-//		}
+		DEBUG("matches attr and we have room, accepting\n");
+		return true;
 	}
 
 	// They do not match but if we have room to expect them based on the expected
 	// reduction from the first goal, go ahead and accept them
 	INDENT(1);
 	rest = adjust_goal_rest(goals);
-	ret = decide_for(p, rest, true);
+	ret = decide_for(p, rest);
 	UNDENT(1);
 	free_goals(rest);
 	return ret;
@@ -554,8 +540,6 @@ int main(int argc, char **argv) {
 
 	all_goals = goals;
 
-	sort_by_L(goals);
-
 	curl = curl_easy_init();
 	if (!curl) {
 		ERROR("curl easy init failed\n");
@@ -582,7 +566,7 @@ int main(int argc, char **argv) {
 		}
 
 		first = false;
-		choice = decide_for(&p, goals, false);
+		choice = decide_for(&p, goals);
 		if (choice)
 			update_goals(&p, goals);
 	}
