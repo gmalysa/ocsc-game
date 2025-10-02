@@ -12,9 +12,9 @@
 
 #include <libgjm/errors.h>
 #include <libgjm/debug.h>
-#include <libgjm/binary_map.h>
+#include <libgjm/util.h>
 
-#define MAX_ATTR 10
+#define MAX_ATTR 7
 #define MAX_GOALS 10
 
 static char *host = "localhost";
@@ -141,56 +141,15 @@ struct goals *clone_rest(struct goals *goals) {
 	return res;
 }
 
-struct binary_map attrmap;
-
-void init_attrmap(void) {
-	static uint64_t __attr[MAX_ATTR] = {
-		0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
-	};
-
-	// Up to 10 attributes supported currently, set the key to attribute id
-	// for everything in the response to new-game and pull terms sequentially
-	// from __attr
-	struct binary_map_entry entries[] = {
-		{.key = 0, .value = &__attr[0]},
-		{.key = 1, .value = &__attr[1]},
-//		{.key = 2, .value = &__attr[2]},
-//		{.key = 3, .value = &__attr[3]},
-//		{.key = 4, .value = &__attr[4]},
-//		{.key = 5, .value = &__attr[5]},
-	};
-
-	error_t *ret;
-
-	ret = binary_map_populate(&attrmap, entries, ARRAY_SIZE(entries));
-	if (NOT_OK(ret)) {
-		error_print(ret);
-		ERROR("unable to init binary map of attributes, quitting");
-		dump_exit();
-	}
-}
-
 float get_p(uint64_t attr) {
-	uint64_t *ap = binary_map_lookup(&attrmap, attr);
-
-	if (!ap) {
-		ERROR("invalid attr %zu", attr);
-		dump_exit();
-	}
-
-	return __p[*ap];
+	ASSERT(attr < MAX_ATTR);
+	return __p[attr];
 }
 
 float get_correlation(uint64_t a, uint64_t b) {
-	uint64_t *ap = binary_map_lookup(&attrmap, a);
-	uint64_t *bp = binary_map_lookup(&attrmap, b);
-
-	if (!ap || !bp) {
-		ERROR("invalid attr %zu or %zu", a, b);
-		dump_exit();
-	}
-
-	return __r[*ap][*bp];
+	ASSERT(a < MAX_ATTR);
+	ASSERT(b < MAX_ATTR);
+	return __r[a][b];
 }
 
 /**
@@ -594,7 +553,6 @@ int main(int argc, char **argv) {
 	goals->g[1]->num = 600;
 
 	all_goals = goals;
-	init_attrmap();
 
 	sort_by_L(goals);
 
