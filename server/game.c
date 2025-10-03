@@ -508,6 +508,9 @@ error_t *find_game(uuid_t id, struct game_t *dest) {
 	if (!reply || reply->type == VALKEY_REPLY_ERROR)
 		goto fail_valkey;
 
+	if (reply->elements < 2)
+		goto fail_valkey;
+
 	// List of 2*n elements of key then value
 	for (size_t i = 0; i < reply->elements; i += 2) {
 		struct valkeyReply *key = reply->element[i];
