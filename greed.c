@@ -23,57 +23,34 @@ static char *proto = "https";
 static char *userid = "f9876829-7686-4dc3-91e6-f62a3dac9031";
 static char gameid[40];
 static uint32_t personid = 0;
-static bool first = true;
 
-// Table of probability values here, in order of attributes as set up
-// in the table below
-
-// Game 0
-static float __p[] = {
-	0.361586f, 0.411255f
-};
-// Scenario 2
-//static float __p[] = {
-//	0.6265f, 0.47f, 0.06227f, 0.398f,
-//};
-// Scenario 3
-//static float __p[] = {
-//	0.6795f, 0.5735f, 0.691f, 0.04614f, 0.04454f, 0.4564f
-//};
-
-// Correlation matrix, with indices matching the order set up in the table below
-// Game 0
-static float __r[2][2] = {
-	{1.0f, 0.781504f},
-	{0.781504f, 1.0f},
-};
-// Scenario 2
-//static float __r[4][4] = {
-//	{1.0f, -0.469616933267432f, 0.0946331703989159f, -0.654940381560618f},
-//	{-0.469616933267432f, 1.0f, 0.141972591404715f, 0.572406780843645f},
-//	{0.0946331703989159f, 0.141972591404715f, 1.0f, 0.144464595056508f},
-//	{-0.654940381560618f, 0.572406780843645f, 0.144464595056508f, 1.0f},
-//};
-// Scenario 3
-//static float __r[6][6] = {
-//	{1.0f, -0.0811017577715299f, -0.169656347550531f, 0.0371992837675389f,
-//		0.0722352115638984f, 0.111887667034228f},
-//	{-0.0811017577715299f, 1.0f, 0.375711059360155f, 0.00366933143887117f,
-//		-0.0308324709818108f, -0.71725293825194f},
-//	{-0.169656347550531f, 0.375711059360155f, 1.0f, -0.00345309267933775f,
-//		-0.110247196063585f, -0.35210244615974f},
-//	{0.0371992837675389f, 0.00366933143887117f, -0.00345309267933775f, 1.0f,
-//		0.479906408031673f, 0.047973811326805f},
-//	{0.0722352115638984f, -0.0308324709818108f, -0.110247196063585f,
-//		0.479906408031673f, 1.0f, 0.099844522862699f},
-//	{0.111887667034228f, -0.71725293825194f, -0.35210244615974f,
-//		0.047973811326805f, 0.099844522862699f, 1.0f},
-//};
+// When we retrieve game parameters we will fill in these two tables
+static float __p[MAX_ATTR] = {0};
+static float __r[MAX_ATTR][MAX_ATTR] = {0};
 
 struct person {
 	uint64_t attr[MAX_ATTR];
 	size_t n;
 };
+
+// For now the goal definition here does not match the goal definition used in
+// the server, so we cannot reuse the header and some constants have to be
+// redeclared here
+#define GOAL_TAIL_BIT			BIT(14)
+#define GOAL_OPER_BIT			BIT(13)
+#define GOAL_ATTR_BIT			BIT(12)
+
+#define GOAL_ATTR(p)			(GOAL_ATTR_BIT | GOAL_VALUE(p))
+#define GOAL_VALUE(p) 			((p) & MASK(11, 0))
+#define GOAL_TAIL				GOAL_TAIL_BIT
+
+// Goal operators
+#define GOAL_OPER_PLUS			(GOAL_OPER_BIT | 0)
+#define GOAL_OPER_MINUS			(GOAL_OPER_BIT | 1)
+#define GOAL_OPER_DIV			(GOAL_OPER_BIT | 2)
+#define GOAL_OPER_MULT			(GOAL_OPER_BIT | 3)
+#define GOAL_OPER_LT			(GOAL_OPER_BIT | 4)
+#define GOAL_OPER_GE			(GOAL_OPER_BIT | 5)
 
 struct goal {
 	uint64_t attr;
@@ -93,10 +70,18 @@ struct goals {
 	struct goal _goals[MAX_GOALS];
 };
 
-static struct goals *all_goals;
-static CURL *curl;
+static struct goals *all_goals = NULL;
+static CURL *curl = NULL;
 
 void dump_exit(void) {
+	if (curl)
+		curl_easy_cleanup(curl);
+
+	if (!all_goals) {
+		ERROR("exit before game initialized\n");
+		exit(1);
+	}
+
 	ERROR("exit. goal state:\n");
 	for (size_t i = 0; i < all_goals->n; ++i) {
 		ERROR("goal %zd: attr %zd, remain %zd\n", i, all_goals->g[i]->attr,
@@ -106,16 +91,14 @@ void dump_exit(void) {
 	ERROR("game uuid: %s\n", gameid);
 	ERROR("current personid: %u\n", personid);
 
-	if (curl)
-		curl_easy_cleanup(curl);
 	exit(1);
 }
 
-struct goals *alloc_goals(size_t n) {
+struct goals *alloc_goals(void) {
 	struct goals *res = calloc(1, sizeof(*res));
-	res->n = n;
+	res->n = MAX_GOALS;
 
-	for (size_t i = 0; i < n; ++i) {
+	for (size_t i = 0; i < MAX_GOALS; ++i) {
 		res->g[i] = &res->_goals[i];
 	}
 
@@ -132,7 +115,8 @@ void free_goals(struct goals *g) {
 struct goals *clone_rest(struct goals *goals) {
 	struct goals *res;
 
-	res = alloc_goals(goals->n - 1);
+	res = alloc_goals();
+	res->n = goals->n - 1;
 
 	for (size_t i = 1; i < goals->n; ++i) {
 		memcpy(res->g[i-1], goals->g[i], sizeof(struct goal));
@@ -424,21 +408,171 @@ bool parse_person(struct person *p, bool first) {
 	return true;
 }
 
-void new_game(void) {
+void new_game(int type) {
 	char urlbuf[256];
 	char *s;
 	char *e;
 	CURLcode res;
+	size_t attr_used;
+	size_t i, j;
 
+	// Retrieve parameters for this game type
 	snprintf(urlbuf, sizeof(urlbuf),
-		"%s://%s/game/new-game?user=%s&type=0",
-		proto, host, userid);
+		"%s://%s/game/params?type=%d",
+		proto, host, type);
 
 	curl_easy_setopt(curl, CURLOPT_URL, urlbuf);
 	res = curl_easy_perform(curl);
 
 	if (res != CURLE_OK) {
-		ERROR("failed to start new game CURLcode = %d\n", res);
+		ERROR("failed to retrieve game parameters: CURLcode = %d\n", res);
+		dump_exit();
+	}
+
+	// Parse out the probabilities
+	s = strstr(body, "\"p\"");
+	s = strstr(s, ":");
+	s = strstr(s, "[") + 1;
+	while (*s != '-' && !isdigit(*s) && *s != ']')
+		s++;
+
+	i = 0;
+	while (isdigit(*s) || *s == '-') {
+		__p[i] = atof(s);
+		i += 1;
+
+		// Go to end of number
+		while (*s != ',' && *s != ']')
+			s++;
+
+		// Find next number or end
+		while (*s != '-' && !isdigit(*s) && *s != ']')
+			s++;
+	}
+
+	attr_used = i;
+
+	// Parse out the correlation matrix
+	s = strstr(body, "\"Q\"");
+	s = strstr(s, ":");
+	s = strstr(s, "[") + 1;
+	while (*s != '-' && !isdigit(*s) && *s != ']')
+		s++;
+
+	i = 0;
+	j = 0;
+	while (isdigit(*s) || *s == '-') {
+		__r[i][j] = atof(s);
+		i += 1;
+		if (i >= attr_used) {
+			// luckily these are symmetric so we don't have to worry about getting
+			// row/col index interpretations to be consistent
+			j += 1;
+			i = 0;
+		}
+
+		// Go to end of number
+		while (*s != ',' && *s != ']')
+			s++;
+
+		// Find next number or end
+		while (*s != '-' && !isdigit(*s) && *s != ']')
+			s++;
+	}
+
+	DEBUG("__p = {");
+	for (i = 0; i < MAX_ATTR; ++i) {
+		DEBUG("%f,", __p[i]);
+	}
+	DEBUG("}\n __r = {");
+	for (i = 0; i < MAX_ATTR; ++i) {
+		for (j = 0; j < MAX_ATTR; ++j) {
+			DEBUG("%f,", __r[i][j]);
+		}
+	}
+	DEBUG("}");
+
+	// Parse out the goal information
+	all_goals = alloc_goals();
+	all_goals->space = 1000;
+	i = 0;
+
+	s = strstr(body, "\"goals\"");
+	s = strstr(s, "[") + 1;
+
+	// find opening goal [ or ] to close empty goal list
+	while (*s != '[' && *s != ']')
+		s++;
+
+	// We only understand one type of goal at the moment:
+	// >= attr[x] k
+	while (*s == '[') {
+		int val;
+
+		// advance to start of goal ints, which are all positive integers
+		while (!isdigit(*s))
+			s++;
+
+		val = atoi(s);
+		if (val != GOAL_OPER_GE) {
+			ERROR("don't understand goals with operator %d\n", val);
+			dump_exit();
+		}
+
+		// advance to end of value
+		while (isdigit(*s))
+			s++;
+
+		// find start of next
+		while (!isdigit(*s))
+			s++;
+
+		val = atoi(s);
+		if (!is_flag_set(val, GOAL_ATTR_BIT)) {
+			ERROR("second goal term isn't an attribute: %d\n", val);
+			dump_exit();
+		}
+		all_goals->g[i]->attr = GOAL_VALUE(val);
+
+		// advance to end of value
+		while (isdigit(*s))
+			s++;
+
+		// find start of next
+		while (!isdigit(*s))
+			s++;
+
+		val = atoi(s);
+		if (val != (int)GOAL_VALUE(val)) {
+			ERROR("final goal term isn't a constant: %d\n", val);
+			dump_exit();
+		}
+		all_goals->g[i]->num = val;
+
+		i += 1;
+
+		// advance to end of goal
+		while (*s != ']')
+			s++;
+		s += 1;
+
+		// advance to start of next goal
+		while (*s != ']' && *s != '[')
+			s++;
+	}
+
+	all_goals->n = i;
+
+	// Set up new game and get game uuid
+	snprintf(urlbuf, sizeof(urlbuf),
+		"%s://%s/game/new-game?user=%s&type=%d",
+		proto, host, userid, type);
+
+	curl_easy_setopt(curl, CURLOPT_URL, urlbuf);
+	res = curl_easy_perform(curl);
+
+	if (res != CURLE_OK) {
+		ERROR("failed to start new game: CURLcode = %d\n", res);
 		dump_exit();
 	}
 
@@ -486,12 +620,14 @@ bool get_person(struct person *p, bool action, bool first) {
 
 void help(void) {
 	ERROR("\n");
-	ERROR(" Usage: ./greed [-h] [-i] [-6] [-H host]\n");
+	ERROR(" Usage: ./greed [-h] [-i] [-6] [-H host] [-u uuid] [-t id]\n");
 	ERROR("\n");
 	ERROR("   -h          Display help information\n");
 	ERROR("   -i          Use http  to connect (default: https)\n");
 	ERROR("   -H host     Connect to host (default: localhost)\n");
 	ERROR("   -6          Use ipv6 to resolve and connect to host\n");
+	ERROR("   -u uuid     Use uuid as the user id (default: %s)\n", userid);
+	ERROR("   -t id       Use id as the game type (default: 0)\n");
 	ERROR("\n");
 	exit(1);
 }
@@ -499,12 +635,11 @@ void help(void) {
 int main(int argc, char **argv) {
 	uuid_t user_uuid;
 	int opt;
-	bool choice;
+	int type = 0;
+	bool choice, first;
 	bool ipv6 = false;
-	struct goals *goals = alloc_goals(2);
-	goals->space = 1000;
 
-	while ((opt = getopt(argc, argv, "hi6u:H:")) != -1) {
+	while ((opt = getopt(argc, argv, "hi6u:H:t:")) != -1) {
 		switch (opt) {
 		case 'h': /* fallthrough */
 		default:
@@ -529,16 +664,13 @@ int main(int argc, char **argv) {
 				help();
 			}
 			userid = optarg;
+			break;
+		case 't':
+			type = atoi(optarg);
+			DEBUG("running game type %d\n", type);
+			break;
 		}
 	}
-
-	// Scenario 1
-	goals->g[0]->attr = 0;
-	goals->g[0]->num = 600;
-	goals->g[1]->attr = 1;
-	goals->g[1]->num = 600;
-
-	all_goals = goals;
 
 	curl = curl_easy_init();
 	if (!curl) {
@@ -555,9 +687,10 @@ int main(int argc, char **argv) {
 	if (ipv6)
 		curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V6);
 
-	new_game();
+	new_game(type);
 
 	choice = false;
+	first = true;
 	while (true) {
 		struct person p;
 
@@ -566,9 +699,9 @@ int main(int argc, char **argv) {
 		}
 
 		first = false;
-		choice = decide_for(&p, goals);
+		choice = decide_for(&p, all_goals);
 		if (choice)
-			update_goals(&p, goals);
+			update_goals(&p, all_goals);
 	}
 
 	return 0;
