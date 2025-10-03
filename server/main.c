@@ -518,6 +518,8 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 
+	DEBUG("web server active, game is ready\n");
+
 	while ((c = getchar())) {
 		if (c == 'q')
 			break;

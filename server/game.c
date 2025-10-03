@@ -249,10 +249,12 @@ static void init_rng(void) {
 }
 
 error_t *init_game(void) {
+	DEBUG("initializing game\n");
 	init_rng();
 
 	for (size_t i = 0; i < n_games; ++i) {
 		assign_dist_params(&game_params[i]);
+		DEBUG("parameter set %zu ready\n", i);
 	}
 
 	return init_valkey();
