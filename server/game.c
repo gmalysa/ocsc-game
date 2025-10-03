@@ -42,6 +42,56 @@ static struct game_params_t game_params[] = {
 		.n_goals = 2,
 	}, {
 		.rng_params = {
+			.n = 2,
+			.t = (double[]) {0.4, 0.3},
+			.a = (double[]) {1.0, 0.0,
+							 1.0, 1.0},
+		},
+		.dist_params = {
+			.marginals = (double[2]) {0},
+			.corr = (double[4]) {0},
+		},
+		.goals = (struct goal_t[]) {
+			{
+				.params = GOAL_PARAMS(
+							GOAL_OPER_GE,
+							GOAL_ATTR(0),
+							GOAL_VALUE(600))
+			}, {
+				.params = GOAL_PARAMS(
+							GOAL_OPER_GE,
+							GOAL_ATTR(1),
+							GOAL_VALUE(600))
+			}
+		},
+		.n_goals = 2,
+	}, {
+		.rng_params = {
+			.n = 2,
+			.t = (double[]) {0.3, 0.4},
+			.a = (double[]) {1.0, 0.0,
+							 1.0, 1.0},
+		},
+		.dist_params = {
+			.marginals = (double[2]) {0},
+			.corr = (double[4]) {0},
+		},
+		.goals = (struct goal_t[]) {
+			{
+				.params = GOAL_PARAMS(
+							GOAL_OPER_GE,
+							GOAL_ATTR(0),
+							GOAL_VALUE(300))
+			}, {
+				.params = GOAL_PARAMS(
+							GOAL_OPER_GE,
+							GOAL_ATTR(1),
+							GOAL_VALUE(300))
+			}
+		},
+		.n_goals = 2,
+	}, {
+		.rng_params = {
 			.n = 4,
 			.t = (double[]) {0.75, 0.2, 0.4, 0.7},
 			.a = (double[]) {1.0, 0.0, 0.0,  0.0,
@@ -280,13 +330,8 @@ uint32_t generate_attributes(size_t n, double *t, double *a) {
 	return res;
 }
 
-bool valid_game_type(int type) {
-	switch (type) {
-	case 0:
-		return true;
-	}
-
-	return false;
+bool valid_game_type(size_t type) {
+	return type < n_games;
 }
 
 struct game_params_t *get_game_params(int type) {

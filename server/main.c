@@ -166,7 +166,7 @@ enum MHD_Result web_new_game(struct MHD_Connection *conn) {
 		return web_bad_arg(conn, "type");
 
 	type = atoi(type_arg);
-	if (!valid_game_type(type))
+	if (!valid_game_type((size_t) type))
 		return web_bad_arg(conn, "type");
 
 	if (!find_user(userid, &user)) {

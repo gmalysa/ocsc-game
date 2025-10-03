@@ -85,7 +85,7 @@ struct user_t {
 };
 
 error_t *init_game(void);
-bool valid_game_type(int type);
+bool valid_game_type(size_t type);
 bool game_is_finished(struct game_t *game);
 void get_normals(double *a, double *b);
 uint32_t generate_attributes(size_t n, double *t, double *a);
