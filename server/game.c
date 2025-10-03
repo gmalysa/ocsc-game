@@ -392,6 +392,7 @@ error_t *create_next_person(struct game_t *game) {
 
 error_t *new_game(int type, struct user_t *user, struct game_t *dest) {
 	uuid_t uuid;
+	int len;
 	struct valkey_t *vk;
 	valkeyReply *reply;
 	error_t *ret;
@@ -430,10 +431,24 @@ error_t *new_game(int type, struct user_t *user, struct game_t *dest) {
 	snprintf(localbuf, sizeof(localbuf), "%s-games", user->name);
 
 	freeReplyObject(reply);
-	reply = valkeyCommand(vk->ctx, "LPUSH %s %s\n", localbuf, dest->name);
+	reply = valkeyCommand(vk->ctx, "LPUSH %s %s", localbuf, dest->name);
 	if (!reply || reply->type == VALKEY_REPLY_ERROR) {
 		DEBUG("orphaned game %s, owned by user %s\n", dest->name, user->name);
 		goto fail_valkey;
+	}
+
+	freeReplyObject(reply);
+	reply = valkeyCommand(vk->ctx, "LLEN %s", localbuf);
+	if (!reply || reply->type == VALKEY_REPLY_ERROR)
+		goto fail_valkey;
+
+	len = atoi(reply->str);
+	if (len > VALKEY_USER_GAME_HISTORY) {
+		freeReplyObject(reply);
+		reply = valkeyCommand(vk->ctx, "RPOP %s", localbuf);
+
+		if (!reply || reply->type == VALKEY_REPLY_ERROR)
+			goto fail_valkey;
 	}
 
 	freeReplyObject(reply);
