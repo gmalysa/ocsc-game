@@ -8,6 +8,19 @@ ocs.$.onReady = function(f) {
 		document.addEventListener('DOMContentLoaded', f);
 };
 
+ocs.$.fetch_json = async function(url) {
+	const args = {
+		method : 'GET',
+		headers : {
+			'Content-Type': 'application/json',
+			'Accept' : 'application/json'
+		},
+	};
+
+	let response = await fetch(url, args);
+	return await response.json();
+}
+
 /**
  * Show username/uuid from cookies in case they didn't write it down.
  * The inline html kind of sucks but pulling in a whole templating engine just to
@@ -20,31 +33,23 @@ ocs.$.onReady(async function() {
 
 	if (user && display) {
 		s1 = `Your most recent user is <span class="highlight">${display.value}</span><br/>with uuid <span class="highlight">${user.value}</span>`;
+		document.getElementsByName("user_uuid").forEach(function(e) {
+			e.innerHTML = user.value;
+		});
 	}
 	else {
 		s1 = `Set a display name to get a user id: <input type="text" id="regname" /><input type="button" onclick="register()" value="Get UUID" />`;
 	}
 
 	document.getElementById("userinfo").innerHTML = s1;
-	document.getElementsByName("user_uuid").forEach(function(e) {
-		e.innerHTML = user.value;
-	});
 });
 
 /**
  * register username
  */
-function register() {
+async function register() {
 	const name = document.getElementById("regname").value;
 	const url = "/game/new-user?name="+name;
-	const args = {
-		method : 'GET',
-		credentials: 'same-origin',
-		headers : {
-			'Content-Type': 'application/json',
-			'Accept' : 'application/json'
-		},
-	};
-
-	return fetch(url, args).then(function(r) { window.location.reload(); });
+	let json = ocs.$.fetch_json(url);
+	window.location.reload();
 }

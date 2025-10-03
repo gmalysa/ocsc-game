@@ -29,3 +29,38 @@ span.highlight {
 	padding: 4px 4px 4px 4px;
 	color: #0f0;
 }
+
+.tlabel {
+	text-align: right;
+	vertical-align: top;
+	padding-right: 10px;
+}
+
+.game_won, .game_true {
+	color: #0f0;
+}
+
+.game_lost, .game_false {
+	color: #f00;
+}
+
+.game_running {
+	color: #00f;
+}
+
+.goal_op {
+	font-weight: bold;
+	color: #a0a;
+}
+
+.goal_attr {
+	color: #0aa;
+}
+
+.goal_const {
+	color: #ccc;
+}
+
+.goal_result {
+	font-weight: bold;
+}
