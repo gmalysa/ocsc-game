@@ -599,6 +599,14 @@ done:
 	return ret;
 }
 
+error_t *find_game_string(const char *str, struct game_t *dest) {
+	uuid_t gameid;
+
+	if (uuid_parse(str, gameid) == 0)
+		return find_game(gameid, dest);
+	return find_game_by_id(atoi(str), dest);
+}
+
 void release_game(struct game_t *game) {
 	if (game->seen)
 		free(game->seen);

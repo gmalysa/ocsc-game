@@ -264,7 +264,6 @@ handle_error:
 }
 
 enum MHD_Result web_process_game_details(struct MHD_Connection *conn) {
-	uuid_t gameid;
 	const char *game_arg;
 	struct MHD_Response *resp;
 	struct ioport *iop;
@@ -276,20 +275,10 @@ enum MHD_Result web_process_game_details(struct MHD_Connection *conn) {
 	if (!game_arg)
 		return web_bad_arg(conn, "game");
 
- 	if (uuid_parse(game_arg, gameid) == 0) {
-		ret = find_game(gameid, &game);
-		if (NOT_OK(ret)) {
-			error_free(ret);
-			return web_bad_arg(conn, "game");
-		}
-	}
-	else {
-		uint32_t id = atoi(game_arg);
-		ret = find_game_by_id(id, &game);
-		if (NOT_OK(ret)) {
-			error_free(ret);
-			return web_bad_arg(conn, "game");
-		}
+	ret = find_game_string(game_arg, &game);
+	if (NOT_OK(ret)) {
+		error_free(ret);
+		return web_bad_arg(conn, "game");
 	}
 
 	iop = iop_alloc_fixstr(msg, sizeof(msg));
@@ -318,7 +307,6 @@ enum MHD_Result web_process_game_details(struct MHD_Connection *conn) {
 
 enum MHD_Result web_symbols(struct MHD_Connection *conn) {
 	const char *game_arg;
-	uuid_t gameid;
 	struct MHD_Response *resp;
 	struct ioport *iop;
 	char *msg;
@@ -331,20 +319,10 @@ enum MHD_Result web_symbols(struct MHD_Connection *conn) {
 	if (!game_arg)
 		return web_bad_arg(conn, "game");
 
-	if (uuid_parse(game_arg, gameid) == 0) {
-		ret = find_game(gameid, &game);
-		if (NOT_OK(ret)) {
-			error_free(ret);
-			return web_bad_arg(conn, "game");
-		}
-	}
-	else {
-		uint32_t id = atoi(game_arg);
-		ret = find_game_by_id(id, &game);
-		if (NOT_OK(ret)) {
-			error_free(ret);
-			return web_bad_arg(conn, "game");
-		}
+	ret = find_game_string(game_arg, &game);
+	if (NOT_OK(ret)) {
+		error_free(ret);
+		return web_bad_arg(conn, "game");
 	}
 
 	// Approximate guess at buffer size, make it larger if there are failures
