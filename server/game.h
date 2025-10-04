@@ -100,6 +100,10 @@ error_t *create_next_person(struct game_t *game);
 error_t *process_next_person(struct game_t *game, bool verdict);
 
 bool find_user(uuid_t id, struct user_t *user);
+bool find_user_by_id(uint32_t id, struct user_t *user);
+bool find_user_by_name(const char *name, struct user_t *user);
+bool find_user_by_string(const char *str, struct user_t *user);
+
 error_t *find_game(uuid_t id, struct game_t *dest);
 error_t *find_game_by_id(uint32_t id, struct game_t *dest);
 error_t *find_game_string(const char *str, struct game_t *dest);

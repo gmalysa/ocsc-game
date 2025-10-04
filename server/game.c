@@ -496,6 +496,72 @@ failure:
 	return false;
 }
 
+bool find_user_by_id(uint32_t id, struct user_t *user) {
+	uuid_t user_uuid;
+	struct valkey_t *vk;
+	struct valkeyReply *reply;
+
+	vk = get_valkey();
+	reply = valkeyCommand(vk->ctx, "HGET userids %d", id);
+	if (!reply || reply->type == VALKEY_REPLY_ERROR)
+		goto failure;
+
+	if (reply->type != VALKEY_REPLY_STRING)
+		goto failure;
+
+	if (uuid_parse(reply->str, user_uuid) < 0)
+		goto failure;
+
+	freeReplyObject(reply);
+	release_valkey(vk);
+	return find_user(user_uuid, user);
+
+failure:
+	freeReplyObject(reply);
+	release_valkey(vk);
+	return false;
+}
+
+bool find_user_by_name(const char *name, struct user_t *user) {
+	uuid_t user_uuid;
+	struct valkey_t *vk;
+	struct valkeyReply *reply;
+
+	vk = get_valkey();
+	reply = valkeyCommand(vk->ctx, "HGET usernames %s", name);
+	if (!reply || reply->type == VALKEY_REPLY_ERROR)
+		goto failure;
+
+	if (reply->type != VALKEY_REPLY_STRING)
+		goto failure;
+
+	if (uuid_parse(reply->str, user_uuid) < 0)
+		goto failure;
+
+	freeReplyObject(reply);
+	release_valkey(vk);
+	return find_user(user_uuid, user);
+
+failure:
+	freeReplyObject(reply);
+	release_valkey(vk);
+	return false;
+}
+
+bool find_user_by_string(const char *str, struct user_t *user) {
+	uuid_t uuid;
+	int id;
+
+	if (uuid_parse(str, uuid) == 0)
+		return find_user(uuid, user);
+
+	if (find_user_by_name(str, user))
+		return true;
+
+	id = atoi(str);
+	return find_user_by_id(id, user);
+}
+
 error_t *find_game(uuid_t id, struct game_t *dest) {
 	char keybuf[UUID_NAME_LEN+2]; // for -m
 	struct valkey_t *vk;

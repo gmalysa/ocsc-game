@@ -176,6 +176,7 @@ enum MHD_Result web_new_game(struct MHD_Connection *conn) {
 	if (!valid_game_type((size_t) type))
 		return web_bad_arg(conn, "type");
 
+	// Require uuid so that you cannot start games as someone else
 	if (!find_user(userid, &user)) {
 		DEBUG("could not find user for (valid) uuid %s\n", user_arg);
 		return web_bad_arg(conn, "user");
