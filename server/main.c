@@ -96,14 +96,13 @@ enum MHD_Result web_new_user(struct MHD_Connection *conn) {
 	strncpy(user.realname, realname, USER_NAME_LEN);
 
 	vk = get_valkey();
-	reply = valkeyCommand(vk->ctx, "HSETNX usernames %s %s", user.realname, user.name);
+	reply = valkeyCommand(vk->ctx, "HGET usernames %s", user.realname);
 	if (!reply || reply->type == VALKEY_REPLY_ERROR) {
 		ret = E_VALKEY(vk->ctx, reply);
 		goto fail_valkey;
 	}
 
-	// HSETNX returns 0 on failure, 1 on success
-	if (!reply->integer) {
+	if (reply->type != VALKEY_REPLY_NIL) {
 		ret = E_MSG("username taken");
 		goto fail_msg;
 	}
@@ -116,6 +115,13 @@ enum MHD_Result web_new_user(struct MHD_Connection *conn) {
 	user.id = reply->integer;
 	uuid_generate(uuid);
 	uuid_unparse(uuid, user.name);
+
+	freeReplyObject(reply);
+	reply = valkeyCommand(vk->ctx, "HSETNX usernames %s %s", user.realname, user.name);
+	if (!reply || reply->type == VALKEY_REPLY_ERROR) {
+		ret = E_VALKEY(vk->ctx, reply);
+		goto fail_valkey;
+	}
 
 	DEBUG("initialized new user %s (%s) id %u\n", user.name, user.realname, user.id);
 

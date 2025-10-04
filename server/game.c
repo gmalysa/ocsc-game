@@ -433,7 +433,7 @@ error_t *new_game(int type, struct user_t *user, struct game_t *dest) {
 	snprintf(localbuf, sizeof(localbuf), "%s-games", user->name);
 
 	freeReplyObject(reply);
-	reply = valkeyCommand(vk->ctx, "LPUSH %s %s", localbuf, dest->name);
+	reply = valkeyCommand(vk->ctx, "LPUSH %s %d", localbuf, dest->id);
 	if (!reply || reply->type == VALKEY_REPLY_ERROR) {
 		DEBUG("orphaned game %s, owned by user %s\n", dest->name, user->name);
 		goto fail_valkey;
@@ -444,7 +444,7 @@ error_t *new_game(int type, struct user_t *user, struct game_t *dest) {
 	if (!reply || reply->type == VALKEY_REPLY_ERROR)
 		goto fail_valkey;
 
-	len = atoi(reply->str);
+	len = reply->integer;
 	if (len > VALKEY_USER_GAME_HISTORY) {
 		freeReplyObject(reply);
 		reply = valkeyCommand(vk->ctx, "RPOP %s", localbuf);
