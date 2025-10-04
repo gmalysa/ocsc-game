@@ -136,6 +136,8 @@ function game_status_string(game) {
 }
 
 const SYM_ACCEPT_BIT = 1 << 7;
+const MAX_SYM = 128;
+const MAX_ATTR = 7;
 
 async function get_game_symbols(id) {
 	const url = '/game/symbols?game='+id;
@@ -168,8 +170,17 @@ function remap_symbol(s) {
 		return String.fromCodePoint(s + 945);
 	s = s - 25;
 
-	// Finally our of 128 currently possible symbols, the last 9 are emoji
+	// Finally out of 128 currently possible symbols, the last 9 are emoji
 	return String.fromCodePoint(s + 0x1f600);
+}
+
+function symbol_to_attrs(sym) {
+	let attrs = new Array(MAX_ATTR).fill(0, 0);
+	for (i = 0; i < MAX_ATTR; ++i) {
+		if (sym & (1 << i))
+			attrs[i] = 1;
+	}
+	return `[${attrs}]`;
 }
 
 async function render_game(id, game) {
@@ -195,15 +206,37 @@ async function render_game(id, game) {
 	});
 
 	let symbols = await get_game_symbols(id);
+	let symcounts = new Array(MAX_SYM).fill(0, 0);
+	let asymcounts = new Array(MAX_SYM).fill(0, 0);
+	console.log(symcounts);
 	strings.push('<tr><td class="tlabel">Symbols</td><td class="symbols">');
 	strings.push(symbols.symbols.map(function(s) {
 		let accepted = s & SYM_ACCEPT_BIT;
 		s = s & ~SYM_ACCEPT_BIT;
+		symcounts[s] = symcounts[s] + 1;
 		let sym = remap_symbol(s);
-		if (accepted)
+		if (accepted) {
+			asymcounts[s] = asymcounts[s] + 1;
 			return `<span class="accepted">${sym}</span>`;
+		}
 		return `<span class="rejected">${sym}</span>`;
 	}).join(''));
+
+	strings.push('<tr><td class="tlabel">Stats</td><td>');
+	symcounts.forEach(function(s, i) {
+		if (s > 0) {
+			strings.push(`<div><span class="goal_const">${remap_symbol(i)}</span>: <span class="accepted">${asymcounts[i]}</span> + <span class="rejected">${s - asymcounts[i]}</span> = ${s}</div>`);
+		}
+	});
+	strings.push('</td></tr>');
+
+	strings.push('<tr><td class="tlabel">Legend</td><td>');
+	symcounts.forEach(function(s, i) {
+		if (s > 0) {
+			strings.push(`<div><span class="goal_const">${remap_symbol(i)}</span>: ${i} = ${symbol_to_attrs(i)}</div>`);
+		}
+	});
+	strings.push('</td></tr>');
 
 	document.getElementById('details').innerHTML = strings.join('');
 
