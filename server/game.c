@@ -361,7 +361,9 @@ void game_update(struct game_t *game) {
 			game->accepted += 1;
 
 		for (uint8_t attr = 0; attr < MAX_ATTRS; ++attr) {
-			if (is_flag_set(game->seen[i], BIT(attr))) {
+			if (is_flag_set(game->seen[i], BIT(attr))
+				&& is_flag_set(game->seen[i], BIT_ATTR_ACCEPT))
+			{
 				game->attr_n[attr] += 1;
 			}
 		}
