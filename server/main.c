@@ -341,10 +341,15 @@ enum MHD_Result web_symbols(struct MHD_Connection *conn) {
 	iop = iop_alloc_fixstr(msg, msglen);
 
 	iop_printf(iop, "{\"count\":%d,\"symbols\":[", game.count);
-	for (i = 0; i < game.count-1; ++i) {
-		iop_printf(iop, "%d,", game.seen[i]);
+	if (game.count > 0) {
+		for (i = 0; i < game.count-1; ++i) {
+			iop_printf(iop, "%d,", game.seen[i]);
+		}
+		iop_printf(iop, "%d]}", game.seen[game.count-1]);
 	}
-	iop_printf(iop, "%d]}", game.seen[game.count-1]);
+	else {
+		iop_printf(iop, "]}");
+	}
 
 	resp = web_reply_json(msg);
 	free(msg);
