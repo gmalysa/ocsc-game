@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <getopt.h>
 #include <limits.h>
 #include <math.h>
 #include <microhttpd.h>
@@ -492,25 +493,68 @@ enum MHD_Result web_entry(void *context, struct MHD_Connection *conn, const char
  * but it is probably more useful as a startup option to reset once before launching
  */
 void reinit_db(void) {
-	// @todo collect things to reset
-	// del userids, usernames, next_user
-	// iterate keys for uuids and delete each of those
-	// iterate keys for uuid-m and delete each of those
+	struct valkey_t *vk;
+	valkeyReply *reply;
+	valkeyReply *inner;
+
+	vk = get_valkey();
+	reply = valkeyCommand(vk->ctx, "KEYS *");
+	if (!reply || reply->type == VALKEY_REPLY_ERROR) {
+		ERROR("valkey failure during reinitialization, fatal\n");
+		exit(1);
+	}
+
+	for (size_t i = 0; i < reply->elements; ++i) {
+		inner = valkeyCommand(vk->ctx, "DEL %s", reply->element[i]->str);
+		if (!inner || inner->type == VALKEY_REPLY_ERROR) {
+			ERROR("failed to delete key %s, fatal\n", reply->element[i]->str);
+			exit(1);
+		}
+		freeReplyObject(inner);
+	}
+
+	freeReplyObject(reply);
+	release_valkey(vk);
+}
+
+void show_help(void) {
+	printf("\n");
+	printf(" berghain-server [-h] [-r]\n");
+	printf("\n");
+	printf("   -h      Show this help\n");
+	printf("   -r      Reset valkey database (removes ALL keys)\n");
+	printf("\n");
+	exit(1);
 }
 
 int main(int argc, char **argv) {
 	char c;
+	int opt;
+	bool reset = false;
 	struct MHD_Daemon *daemon;
 	error_t *ret;
 
-	UNUSED(argc);
-	UNUSED(argv);
+	while ((opt = getopt(argc, argv, "hr")) != -1) {
+		switch (opt) {
+		case 'h': /* fallthrough */
+		default:
+			show_help();
+			break;
+		case 'r':
+			DEBUG("reset valkey database\n");
+			reset = true;
+			break;
+		}
+	}
 
 	ret = init_game();
 	if (NOT_OK(ret)) {
 		error_print(ret);
 		exit(1);
 	}
+
+	if (reset)
+		reinit_db();
 
 	daemon = MHD_start_daemon(MHD_USE_INTERNAL_POLLING_THREAD, GAME_PORT, NULL, NULL,
 		&web_entry, NULL, MHD_OPTION_END);
