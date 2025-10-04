@@ -209,7 +209,6 @@ async function render_game(id, game) {
 	let symbols = await get_game_symbols(id);
 	let symcounts = new Array(MAX_SYM).fill(0, 0);
 	let asymcounts = new Array(MAX_SYM).fill(0, 0);
-	console.log(symcounts);
 	strings.push('<tr><td class="tlabel">Symbols</td><td class="symbols">');
 	strings.push(symbols.symbols.map(function(s) {
 		let accepted = s & SYM_ACCEPT_BIT;
