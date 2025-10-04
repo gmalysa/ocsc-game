@@ -27,5 +27,5 @@ ocs.$.link_enter = function(src, fn) {
 			if (k.keyCode == 13)
 				fn();
 		});
-	}
+	});
 }
