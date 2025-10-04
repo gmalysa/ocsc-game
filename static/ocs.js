@@ -20,3 +20,12 @@ ocs.$.fetch_json = async function(url) {
 	let response = await fetch(url, args);
 	return await response.json();
 }
+
+ocs.$.link_enter = function(src, fn) {
+	ocs.$.onReady(function() {
+		document.getElementById(src).addEventListener("keypress", function(k) {
+			if (k.keyCode == 13)
+				fn();
+		});
+	}
+}

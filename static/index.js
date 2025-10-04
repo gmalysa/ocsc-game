@@ -7,6 +7,7 @@ ocs.$.onReady(async function() {
 	const user = await cookieStore.get("userid");
 	const display = await cookieStore.get("userdisplay");
 	let s1 = "";
+	let setkey = false;
 
 	if (user && display) {
 		s1 = `Your most recent user is <span class="highlight">${display.value}</span><br/>with uuid <span class="highlight">${user.value}</span>`;
@@ -16,9 +17,13 @@ ocs.$.onReady(async function() {
 	}
 	else {
 		s1 = `Set a display name to get a user id: <input type="text" id="regname" /><input type="button" onclick="register()" value="Get UUID" />`;
+		setkey = true;
 	}
 
 	document.getElementById("userinfo").innerHTML = s1;
+
+	if (setkey)
+		ocs.$.link_enter('regname', register);
 });
 
 /**

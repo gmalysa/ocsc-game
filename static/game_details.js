@@ -250,10 +250,4 @@ function load_form_game() {
 }
 
 ocs.$.onReady(load_game);
-
-ocs.$.onReady(function() {
-	document.getElementById('gameid').addEventListener("keypress", function(k) {
-		if (k.keyCode == 13)
-			load_form_game();
-	});
-});
+ocs.$.link_enter('gameid', load_form_game);
