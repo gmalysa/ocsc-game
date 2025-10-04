@@ -445,6 +445,26 @@ enum MHD_Result web_params(struct MHD_Connection *conn) {
 	return MHD_queue_response(conn, MHD_HTTP_OK, resp);
 }
 
+enum MHD_Result web_gameid(struct MHD_Connection *conn) {
+	struct valkey_t *vk;
+	valkeyReply *reply;
+	char msg[128];
+
+	vk = get_valkey();
+	reply = valkeyCommand(vk->ctx, "GET next_game");
+	if (!reply || reply->type == VALKEY_REPLY_ERROR) {
+		error_t *ret = E_VALKEY(vk->ctx, reply);
+		freeReplyObject(reply);
+		release_valkey(vk);
+		return web_send_error(conn, ret);
+	}
+
+	snprintf(msg, sizeof(msg), "{\"gameid\":%s}", reply->str);
+	freeReplyObject(reply);
+	release_valkey(vk);
+	return MHD_queue_response(conn, MHD_HTTP_OK, web_reply_json(msg));
+}
+
 /**
  * Handle a new request, each of these is called in its own thread by the
  * MHD internals for now
@@ -479,6 +499,9 @@ enum MHD_Result web_entry(void *context, struct MHD_Connection *conn, const char
 
 	if (STRING_EQUALS(url, "/params"))
 		return web_params(conn);
+
+	if (STRING_EQUALS(url, "/gameid"))
+		return web_gameid(conn);
 
 	DEBUG("failed to match any routes for %s\n", url);
 	return MHD_NO;
