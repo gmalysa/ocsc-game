@@ -135,6 +135,43 @@ function game_status_string(game) {
 	return `<span class="game_running">RUNNING</span>`;
 }
 
+const SYM_ACCEPT_BIT = 1 << 7;
+
+async function get_game_symbols(id) {
+	const url = '/game/symbols?game='+id;
+	return await ocs.$.fetch_json(url);
+}
+
+function remap_symbol(s) {
+	// First use a-z
+	if (s < 26)
+		return String.fromCodePoint(s + 97);
+	s = s - 26;
+
+	// Then use A-Z and following symbols
+	if (s < 32)
+		return String.fromCodePoint(s + 65);
+	s = s - 32;
+
+	// Then use symbols + numbers below A-Z
+	if (s < 32)
+		return String.fromCodePoint(s + 33);
+	s = s - 32;
+
+	// Then use a couple of spares at the end of ascii
+	if (s < 4)
+		return String.fromCodePoint(s + 123);
+	s = s - 4;
+
+	// Then lowercase greek letters
+	if (s < 25)
+		return String.fromCodePoint(s + 945);
+	s = s - 25;
+
+	// Finally our of 128 currently possible symbols, the last 9 are emoji
+	return String.fromCodePoint(s + 0x1f600);
+}
+
 async function render_game(id, game) {
 	let params = await get_game_params(game.type);
 
@@ -157,6 +194,17 @@ async function render_game(id, game) {
 		strings.push('</td></tr>');
 	});
 
+	let symbols = await get_game_symbols(id);
+	strings.push('<tr><td class="tlabel">Symbols</td><td class="symbols">');
+	strings.push(symbols.symbols.map(function(s) {
+		let accepted = s & SYM_ACCEPT_BIT;
+		s = s & ~SYM_ACCEPT_BIT;
+		let sym = remap_symbol(s);
+		if (accepted)
+			return `<span class="accepted">${sym}</span>`;
+		return `<span class="rejected">${sym}</span>`;
+	}).join(''));
+
 	document.getElementById('details').innerHTML = strings.join('');
 
 	if (!game.finished)
@@ -169,6 +217,7 @@ function load_form_game() {
 }
 
 ocs.$.onReady(load_game);
+
 ocs.$.onReady(function() {
 	document.getElementById('gameid').addEventListener("keypress", function(k) {
 		if (k.keyCode == 13)

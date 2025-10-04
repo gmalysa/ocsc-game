@@ -30,6 +30,11 @@ span.highlight {
 	color: #0f0;
 }
 
+.symbols {
+	max-width: 550px;
+	overflow-wrap: anywhere;
+}
+
 .tlabel {
 	text-align: right;
 	vertical-align: top;
@@ -40,7 +45,7 @@ span.highlight {
 	color: #0f0;
 }
 
-.game_lost, .game_false {
+.game_lost, .game_false, .rejected {
 	color: #f00;
 }
 
@@ -53,7 +58,7 @@ span.highlight {
 	color: #a0a;
 }
 
-.goal_attr {
+.goal_attr, .accepted {
 	color: #0aa;
 }
 
