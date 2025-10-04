@@ -456,6 +456,59 @@ enum MHD_Result web_gameid(struct MHD_Connection *conn) {
 	return MHD_queue_response(conn, MHD_HTTP_OK, web_reply_json(msg));
 }
 
+enum MHD_Result web_user_games(struct MHD_Connection *conn) {
+	const char *user_arg;
+	struct valkey_t *vk;
+	valkeyReply *reply;
+	char *buf;
+	size_t buflen;
+	struct ioport *iop;
+	struct MHD_Response *resp;
+	struct user_t user = {0};
+
+	user_arg = MHD_lookup_connection_value(conn, MHD_GET_ARGUMENT_KIND, "name");
+	if (!user_arg)
+		return web_bad_arg(conn, "name");
+
+	if (!find_user_by_string(user_arg, &user))
+		return web_bad_arg(conn, "name");
+
+	vk = get_valkey();
+	reply = valkeyCommand(vk->ctx, "LRANGE %s-games 0 -1", user.name);
+	if (!reply || reply->type == VALKEY_REPLY_ERROR) {
+		error_t *ret = E_VALKEY(vk->ctx, reply);
+		freeReplyObject(reply);
+		release_valkey(vk);
+		return web_send_error(conn, ret);
+	}
+
+	// number of games * up to 10 digits per game + scaffolding
+	buflen = 128 + 10*reply->elements;
+	buf = calloc(buflen, sizeof(*buf));
+	// @todo check buf alloc
+
+	iop = iop_alloc_fixstr(buf, buflen);
+	// @todo check iop alloc
+
+	iop_printf(iop, "{\"games\":[");
+	if (reply->elements > 0) {
+		for (size_t i = 0; i < reply->elements-1; ++i) {
+			iop_printf(iop, "%s,", reply->element[i]->str);
+		}
+		iop_printf(iop, "%s]}", reply->element[reply->elements-1]->str);
+	}
+	else {
+		iop_printf(iop, "]}");
+	}
+
+	iop_free(iop);
+	resp = web_reply_json(buf);
+	free(buf);
+	freeReplyObject(reply);
+	release_valkey(vk);
+	return MHD_queue_response(conn, MHD_HTTP_OK, resp);
+}
+
 /**
  * Handle a new request, each of these is called in its own thread by the
  * MHD internals for now
@@ -493,6 +546,9 @@ enum MHD_Result web_entry(void *context, struct MHD_Connection *conn, const char
 
 	if (STRING_EQUALS(url, "/gameid"))
 		return web_gameid(conn);
+
+	if (STRING_EQUALS(url, "/user-games"))
+		return web_user_games(conn);
 
 	DEBUG("failed to match any routes for %s\n", url);
 	return MHD_NO;
