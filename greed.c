@@ -20,7 +20,7 @@
 static char *host = "localhost";
 static char *proto = "https";
 
-static char *userid = "f9876829-7686-4dc3-91e6-f62a3dac9031";
+static char *userid = "b7894ec6-7a3b-4646-8890-32f9daa367f8";
 static char gameid[40];
 static uint32_t personid = 0;
 
