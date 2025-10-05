@@ -483,6 +483,68 @@ error_t *describe_game(struct ioport *iop, uint32_t id) {
 	return OK;
 }
 
+enum MHD_Result web_recent_games(struct MHD_Connection *conn) {
+	struct valkey_t *vk;
+	valkeyReply *reply;
+	char *buf;
+	size_t buflen;
+	struct ioport *iop;
+	struct MHD_Response *resp;
+	error_t *ret;
+	int n, i;
+
+	vk = get_valkey();
+	reply = valkeyCommand(vk->ctx, "GET next_game");
+	if (!reply || reply->type == VALKEY_REPLY_ERROR) {
+		error_t *ret = E_VALKEY(vk->ctx, reply);
+		freeReplyObject(reply);
+		release_valkey(vk);
+		return web_send_error(conn, ret);
+	}
+
+	// same approach as in user games just fixed number of recent games
+	buflen = 64 + 64*RECENT_GAME_LIMIT;
+	buf = calloc(buflen, sizeof(*buf));
+	if (!buf)
+		goto failure_noiop;
+
+	iop = iop_alloc_fixstr(buf, buflen);
+	if (!iop)
+		goto failure_nobuf;
+
+	n = atoi(reply->str);
+	iop_printf(iop, "{\"games\":[");
+	if (n > 0) {
+		for (i = 0; i < RECENT_GAME_LIMIT && n - i >= 1; ++i) {
+			ret = describe_game(iop, n - i);
+			if (NOT_OK(ret))
+				goto failure;
+			iop_printf(iop, ",");
+		}
+
+		ret = describe_game(iop, n - i);
+		if (NOT_OK(ret))
+			goto failure;
+	}
+	iop_printf(iop, "]}");
+
+	iop_free(iop);
+	resp = web_reply_json(buf);
+	free(buf);
+	freeReplyObject(reply);
+	release_valkey(vk);
+	return MHD_queue_response(conn, MHD_HTTP_OK, resp);
+
+failure:
+	iop_free(iop);
+failure_noiop:
+	free(buf);
+failure_nobuf:
+	freeReplyObject(reply);
+	release_valkey(vk);
+	return web_send_error(conn, ret);
+}
+
 enum MHD_Result web_user_games(struct MHD_Connection *conn) {
 	const char *user_arg;
 	struct valkey_t *vk;
@@ -575,6 +637,9 @@ enum MHD_Result web_entry(void *context, struct MHD_Connection *conn, const char
 
 	if (STRING_EQUALS(url, "/user-games"))
 		return web_user_games(conn);
+
+	if (STRING_EQUALS(url, "/recent-games"))
+		return web_recent_games(conn);
 
 	DEBUG("failed to match any routes for %s\n", url);
 	return MHD_NO;
