@@ -28,8 +28,9 @@
 #define UUID_NAME_LEN 37
 #define USER_NAME_LEN 32
 
-// Valkey storage parameters
+// History and recency parameters
 #define VALKEY_USER_GAME_HISTORY 100
+#define RECENT_GAME_LIMIT 100
 
 struct game_params_t {
 	struct gen_params {
