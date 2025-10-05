@@ -29,7 +29,7 @@ async function show_games() {
 }
 
 function format_game(g) {
-	return `<li><a href="/game.html#${g.id}">Game ${g.id}: ${ocs.$.game_status_string(g)}</a> [<span class="goal_const">${g.count}</span> seen, <span class="goal_const">${g.accepted}</span>/1000 accepted]</li>`;
+	return `<li><a href="/game.html#${g.id}">Game ${g.id}: ${ocs.$.game_status_string(g)}</a> [type <span class="goal_const">${g.type}</span>, seen <span class="goal_const">${g.count}</span>, accepted <span class="goal_const">${g.accepted}</span>/1000]</li>`;
 }
 
 async function show_user_games(user) {

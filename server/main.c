@@ -490,8 +490,8 @@ error_t *describe_game(struct ioport *iop, uint32_t id) {
 	}
 
 	iop_printf(iop,
-		"{\"id\":%u,\"count\":%u,\"accepted\":%u,",
-		game.id, game.count, game.accepted);
+		"{\"id\":%u,\"count\":%u,\"accepted\":%u,\"type\":%u,",
+		game.id, game.count, game.accepted, game.type);
 
 	if (game_is_finished(&game)) {
 		iop_printf(iop, "\"finished\":true,\"won\":%s}",
