@@ -456,6 +456,30 @@ enum MHD_Result web_gameid(struct MHD_Connection *conn) {
 	return MHD_queue_response(conn, MHD_HTTP_OK, web_reply_json(msg));
 }
 
+error_t *describe_game(struct ioport *iop, uint32_t id) {
+	struct game_t game = {0};
+	error_t *ret;
+
+	ret = find_game_by_id(id, &game);
+	if (NOT_OK(ret))
+		return ret;
+
+	iop_printf(iop,
+		"{\"id\":%u,\"count\":%u,\"accepted\":%u,",
+		game.id, game.count, game.accepted);
+
+	if (game_is_finished(&game)) {
+		iop_printf(iop, "\"finished\":true,\"won\":%s}",
+			game.goals_satisfied ? "true" : "false");
+	}
+	else {
+		iop_printf(iop, "\"finished\":false}");
+	}
+
+	release_game(&game);
+	return OK;
+}
+
 enum MHD_Result web_user_games(struct MHD_Connection *conn) {
 	const char *user_arg;
 	struct valkey_t *vk;
@@ -482,8 +506,8 @@ enum MHD_Result web_user_games(struct MHD_Connection *conn) {
 		return web_send_error(conn, ret);
 	}
 
-	// number of games * up to 10 digits per game + scaffolding
-	buflen = 128 + 10*reply->elements;
+	// number of games * some descriptor length guess + scaffolding
+	buflen = 128 + 64*reply->elements;
 	buf = calloc(buflen, sizeof(*buf));
 	// @todo check buf alloc
 
@@ -493,13 +517,12 @@ enum MHD_Result web_user_games(struct MHD_Connection *conn) {
 	iop_printf(iop, "{\"games\":[");
 	if (reply->elements > 0) {
 		for (size_t i = 0; i < reply->elements-1; ++i) {
-			iop_printf(iop, "%s,", reply->element[i]->str);
+			describe_game(iop, atoi(reply->element[i]->str));
+			iop_printf(iop, ",");
 		}
-		iop_printf(iop, "%s]}", reply->element[reply->elements-1]->str);
+		describe_game(iop, atoi(reply->element[reply->elements-1]->str));
 	}
-	else {
-		iop_printf(iop, "]}");
-	}
+	iop_printf(iop, "]}");
 
 	iop_free(iop);
 	resp = web_reply_json(buf);
