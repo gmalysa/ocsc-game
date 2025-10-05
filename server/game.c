@@ -482,7 +482,7 @@ bool find_user(uuid_t id, struct user_t *user) {
 	if (reply->element[0]->type != VALKEY_REPLY_STRING)
 		goto failure;
 
-	user->id = reply->element[0]->integer;
+	user->id = atoi(reply->element[0]->str);
 	memset(user->realname, 0, sizeof(user->realname));
 	ASSERT(reply->element[1]->len <= USER_NAME_LEN);
 	memcpy(user->realname, reply->element[1]->str, reply->element[1]->len);
