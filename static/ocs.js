@@ -29,3 +29,16 @@ ocs.$.link_enter = function(src, fn) {
 		});
 	});
 }
+
+ocs.$.game_status_string = function(game) {
+	if (game.finished) {
+		if (game.won) {
+			return `<span class="game_won">WON</span>`;
+		}
+		else {
+			return `<span class="game_lost">LOST</span>`;
+		}
+	}
+
+	return `<span class="game_running">RUNNING</span>`;
+}

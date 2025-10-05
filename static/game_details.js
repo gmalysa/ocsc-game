@@ -122,19 +122,6 @@ function render_goal(goal, game) {
 	return strings.join('');
 }
 
-function game_status_string(game) {
-	if (game.finished) {
-		if (game.won) {
-			return `<span class="game_won">WON</span>`;
-		}
-		else {
-			return `<span class="game_lost">LOST</span>`;
-		}
-	}
-
-	return `<span class="game_running">RUNNING</span>`;
-}
-
 const SYM_ACCEPT_BIT = 1 << 7;
 const MAX_SYM = 128;
 const MAX_ATTR = 7;
@@ -190,7 +177,7 @@ async function render_game(id, game) {
 	strings.push(`<table>`);
 	strings.push(`<tr><td class="tlabel">Game</td><td>${id}</td></tr>`);
 	strings.push(`<tr><td class="tlabel">Type</td><td>${game.type}</td></tr>`);
-	strings.push(`<tr><td class="tlabel">Status</td><td>${game_status_string(game)}</td></tr>`);
+	strings.push(`<tr><td class="tlabel">Status</td><td>${ocs.$.game_status_string(game)}</td></tr>`);
 	strings.push(`<tr><td class="tlabel">Accepted</td><td><span class="goal_const">${game.accepted}</span></td></tr>`);
 	strings.push(`<tr><td class="tlabel">Rejected</td><td><span class="goal_const">${game.count-game.accepted}</span></td></tr>`);
 
