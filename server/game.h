@@ -29,7 +29,7 @@
 #define USER_NAME_LEN 32
 
 // Valkey storage parameters
-#define VALKEY_USER_GAME_HISTORY 1000
+#define VALKEY_USER_GAME_HISTORY 100
 
 struct game_params_t {
 	struct gen_params {
