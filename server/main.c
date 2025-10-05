@@ -95,6 +95,11 @@ enum MHD_Result web_new_user(struct MHD_Connection *conn) {
 	// realname already zero initialized, guaranteed null terminator at USER_NAME_LEN
 	strncpy(user.realname, realname, USER_NAME_LEN);
 
+	for (size_t i = 0; i < strlen(user.realname); ++i) {
+		if (!isalnum(user.realname[i]))
+			return web_bad_arg(conn, "name");
+	}
+
 	vk = get_valkey();
 	reply = valkeyCommand(vk->ctx, "HGET usernames %s", user.realname);
 	if (!reply || reply->type == VALKEY_REPLY_ERROR) {
