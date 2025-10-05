@@ -461,8 +461,11 @@ error_t *describe_game(struct ioport *iop, uint32_t id) {
 	error_t *ret;
 
 	ret = find_game_by_id(id, &game);
-	if (NOT_OK(ret))
-		return ret;
+	if (NOT_OK(ret)) {
+		error_free(ret);
+		iop_printf(iop, "{}");
+		return OK;
+	}
 
 	iop_printf(iop,
 		"{\"id\":%u,\"count\":%u,\"accepted\":%u,",
