@@ -58,6 +58,17 @@ GET request to start a game and receive a game UUID, then you will use this UUID
 request new symbols and accept or reject pending symbols.</p>
 
 <h2>Game Status</h2>
+<p>So far the basic web API is functional. You can get a user uuid, start and play
+games, and the outcomes of those games are saved and visible on the website. Several
+scenarios including goals similar to the first Listen Labs scenario are available,
+with different probability distributions that result in three types of solutions, and
+one experimental scenario is defined which includes goals that express bounds between
+two attributes. The experimental scenario has not been analyzed and could range from
+trivial to impossible. An analyzer for scoring performance relative to an offline
+algorithm is also forthcoming. It is ready for the first three scenarios but not
+ready for the experimental one and has not been integrated into the server software
+yet as a result.
+</p>
 <p id="recent_games"></p>
 
 <h2>API</h2>
