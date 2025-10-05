@@ -47,7 +47,7 @@ ocs.$.onReady(async function() {
 	strings.push(`There are <span class="goal_const">${reply.rulesets}</span> different game types available. `);
 
 	reply = await ocs.$.fetch_json('/game/gameid');
-	strings.push(`<span class="goal_const">${reply.gameid}</span> games have been played. <a href="/recent.html">Browse recent games</a>.`);
+	strings.push(`<span class="goal_const">${reply.gameid+1}</span> games have been played. <a href="/recent.html">Browse recent games</a>.`);
 
 	document.getElementById('recent_games').innerHTML = strings.join('');
 })
