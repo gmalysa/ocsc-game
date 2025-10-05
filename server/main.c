@@ -553,6 +553,7 @@ enum MHD_Result web_user_games(struct MHD_Connection *conn) {
 	size_t buflen;
 	struct ioport *iop;
 	struct MHD_Response *resp;
+	error_t *ret;
 	struct user_t user = {0};
 
 	user_arg = MHD_lookup_connection_value(conn, MHD_GET_ARGUMENT_KIND, "name");
@@ -572,20 +573,26 @@ enum MHD_Result web_user_games(struct MHD_Connection *conn) {
 	}
 
 	// number of games * some descriptor length guess + scaffolding
-	buflen = 128 + 64*reply->elements;
+	buflen = 64 + 64*reply->elements;
 	buf = calloc(buflen, sizeof(*buf));
-	// @todo check buf alloc
+	if (!buf)
+		goto failure_nobuf;
 
 	iop = iop_alloc_fixstr(buf, buflen);
-	// @todo check iop alloc
+	if (!iop)
+		goto failure_noiop;
 
 	iop_printf(iop, "{\"games\":[");
 	if (reply->elements > 0) {
 		for (size_t i = 0; i < reply->elements-1; ++i) {
-			describe_game(iop, atoi(reply->element[i]->str));
+			ret = describe_game(iop, atoi(reply->element[i]->str));
+			if (NOT_OK(ret))
+				goto failure;
 			iop_printf(iop, ",");
 		}
-		describe_game(iop, atoi(reply->element[reply->elements-1]->str));
+		ret = describe_game(iop, atoi(reply->element[reply->elements-1]->str));
+		if (NOT_OK(ret))
+			goto failure;
 	}
 	iop_printf(iop, "]}");
 
@@ -595,6 +602,15 @@ enum MHD_Result web_user_games(struct MHD_Connection *conn) {
 	freeReplyObject(reply);
 	release_valkey(vk);
 	return MHD_queue_response(conn, MHD_HTTP_OK, resp);
+
+failure:
+	iop_free(iop);
+failure_noiop:
+	free(buf);
+failure_nobuf:
+	freeReplyObject(reply);
+	release_valkey(vk);
+	return web_send_error(conn, ret);
 }
 
 /**
