@@ -177,6 +177,7 @@ async function render_game(id, game) {
 	strings.push(`<table>`);
 	strings.push(`<tr><td class="tlabel">Game</td><td>${id}</td></tr>`);
 	strings.push(`<tr><td class="tlabel">Type</td><td>${game.type}</td></tr>`);
+	strings.push(`<tr><td class="tlabel">User</td><td><a href="/recent.html#${game.user}">${game.user}</a></td></tr>`);
 	strings.push(`<tr><td class="tlabel">Status</td><td>${ocs.$.game_status_string(game)}</td></tr>`);
 	strings.push(`<tr><td class="tlabel">Accepted</td><td><span class="goal_const">${game.accepted}</span></td></tr>`);
 	strings.push(`<tr><td class="tlabel">Rejected</td><td><span class="goal_const">${game.count-game.accepted}</span></td></tr>`);
