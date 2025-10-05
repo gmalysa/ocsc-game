@@ -10,7 +10,7 @@ ocs.$.onReady(async function() {
 	let setkey = false;
 
 	if (user && display) {
-		s1 = `Your most recent user is <span class="highlight">${display.value}</span><br/>with uuid <span class="highlight">${user.value}</span>`;
+		s1 = `Your most recent user is <span class="highlight">${display.value}</span><br/>with uuid <span class="highlight">${user.value}</span><br /><input type="button" value="forget me" onclick="forget()" />`;
 		document.getElementsByName("user_uuid").forEach(function(e) {
 			e.innerHTML = user.value;
 		});
@@ -32,7 +32,18 @@ ocs.$.onReady(async function() {
 async function register() {
 	const name = document.getElementById("regname").value;
 	const url = "/game/new-user?name="+name;
-	let json = ocs.$.fetch_json(url);
+	let json = await ocs.$.fetch_json(url);
+	if (json.error) {
+		document.getElementById("userinfo").innerHTML += '<br />'+json.error;
+	}
+	else {
+		window.location.reload();
+	}
+}
+
+async function forget() {
+	await cookieStore.delete("userid");
+	await cookieStore.delete("userdisplay");
 	window.location.reload();
 }
 
@@ -43,7 +54,6 @@ ocs.$.onReady(async function() {
 	let strings = [];
 
 	let reply = await ocs.$.fetch_json('/game/params');
-	console.log(reply);
 	strings.push(`There are <span class="goal_const">${reply.rulesets}</span> different game types available. `);
 
 	reply = await ocs.$.fetch_json('/game/gameid');
