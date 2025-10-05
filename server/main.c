@@ -62,6 +62,16 @@ enum MHD_Result web_send_error(struct MHD_Connection *conn, error_t * __mine err
 	error_ioprint(err, iop);
 	iop_printf(iop, "\"}");
 
+	// For now there's an issue where error_ioprint always includes a trailing
+	// newline, which is fine in console applications but invalid in json, so we
+	// convert it to a period
+	for (size_t i = 0; i < sizeof(msg); ++i) {
+		if (msg[i] == '\n') {
+			msg[i] = '.';
+			break;
+		}
+	}
+
 	DEBUG("request with inline error object:");
 	INDENT(2);
 	error_print(err);
