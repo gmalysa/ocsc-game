@@ -283,6 +283,7 @@ enum MHD_Result web_process_game_details(struct MHD_Connection *conn) {
 	error_t *ret;
 	char msg[256];
 	struct game_t game = {0};
+	struct user_t user = {0};
 
 	game_arg = MHD_lookup_connection_value(conn, MHD_GET_ARGUMENT_KIND, "game");
 	if (!game_arg)
@@ -294,11 +295,17 @@ enum MHD_Result web_process_game_details(struct MHD_Connection *conn) {
 		return web_bad_arg(conn, "game");
 	}
 
+	if (!find_user_by_id(game.userid, &user)) {
+		DEBUG("game userid: %d\n", game.userid);
+		release_game(&game);
+		return web_bad_arg(conn, "game");
+	}
+
 	iop = iop_alloc_fixstr(msg, sizeof(msg));
 
 	iop_printf(iop,
-		"{\"count\":%u,\"accepted\":%u,\"next\":%u,\"attrs\":[",
-		game.count, game.accepted, game.next);
+		"{\"count\":%u,\"user\":\"%s\",\"accepted\":%u,\"next\":%u,\"attrs\":[",
+		game.count, user.realname, game.accepted, game.next);
 	for (size_t i = 0; i < MAX_ATTRS-1; ++i) {
 		iop_printf(iop, "%u,", game.attr_n[i]);
 	}
