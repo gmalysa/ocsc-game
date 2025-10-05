@@ -557,6 +557,25 @@ failure_nobuf:
 	return web_send_error(conn, ret);
 }
 
+enum MHD_Result web_lookup(struct MHD_Connection *conn) {
+	const char *user_arg;
+	struct user_t user = {0};
+	char msg[128];
+
+	user_arg = MHD_lookup_connection_value(conn, MHD_GET_ARGUMENT_KIND, "name");
+	if (!user_arg)
+		return web_bad_arg(conn, "name");
+
+	if (!find_user_by_string(user_arg, &user))
+		return web_bad_arg(conn, "name");
+
+	snprintf(msg, sizeof(msg),
+		"{\"id\":%u,\"name\":\"%s\"}",
+		user.id, user.realname);
+
+	return MHD_queue_response(conn, MHD_HTTP_OK, web_reply_json(msg));
+}
+
 enum MHD_Result web_user_games(struct MHD_Connection *conn) {
 	const char *user_arg;
 	struct valkey_t *vk;
@@ -668,6 +687,9 @@ enum MHD_Result web_entry(void *context, struct MHD_Connection *conn, const char
 
 	if (STRING_EQUALS(url, "/recent-games"))
 		return web_recent_games(conn);
+
+	if (STRING_EQUALS(url, "/lookup"))
+		return web_lookup(conn);
 
 	DEBUG("failed to match any routes for %s\n", url);
 	return MHD_NO;
