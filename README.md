@@ -30,6 +30,7 @@ To run the server you will need to:
 
 This will provide output to indicate that the server is ready:
 
+```
 $ ./berghain-server
 initializing game
 parameter set 0 ready
@@ -37,3 +38,4 @@ parameter set 1 ready
 parameter set 2 ready
 parameter set 3 ready
 web server active, game is ready
+```
